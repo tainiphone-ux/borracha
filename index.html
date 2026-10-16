@@ -104,6 +104,8 @@
   .dos-botones[hidden] { display: none; }
   .grande { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 30px; padding: 16px 8px; border-radius: 14px; }
   .grande span { font-size: 15px; }
+  .add-persona { border-top: 1px solid var(--borde); margin-top: 14px; padding-top: 4px; }
+  .add-persona > label:first-child { font-weight: 600; color: var(--txt); font-size: 15px; }
   .lista { list-style: none; margin: 0; padding: 0; }
   .lista li { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--borde); }
   .lista li:last-child { border-bottom: 0; }
@@ -164,28 +166,21 @@
       <h2>¿Quién está de turno?</h2>
       <div class="chips" id="chipsTurno"></div>
       <p class="ayuda">Toca un nombre para cambiarlo por otra persona, quitarlo o incluirlo.</p>
-    </div>
-
-    <div class="card">
-      <h2>Cambios de guardia y ausencias</h2>
-      <ul class="lista" id="listaCambios"></ul>
-      <button class="btn-sec btn-full" id="btnCambio" style="margin-top:6px">🔄 Sustituir a una persona</button>
+      <div class="add-persona">
+        <label for="nuevoNombre">➕ Añadir persona</label>
+        <div class="fila">
+          <input id="nuevoNombre" placeholder="Nombre y apellido" autocomplete="off">
+          <button class="btn fijo" id="btnAddPersona">Añadir</button>
+        </div>
+        <label class="check"><input type="checkbox" id="fijoPersona"> <span id="txtFijo">Guardarla fija en la lista de este turno</span></label>
+        <p class="ayuda">Sin marcar, solo se añade a la comida de hoy.</p>
+      </div>
     </div>
 
     <div class="card">
       <h2>¿Quién almuerza y quién cena?</h2>
       <ul class="lista" id="listaComidas"></ul>
       <p class="ayuda">Quien solo almuerza o solo cena paga solo la parte de esa comida.</p>
-    </div>
-
-    <div class="card">
-      <h2>➕ Añadir persona</h2>
-      <div class="fila">
-        <input id="nuevoNombre" placeholder="Nombre y apellido" autocomplete="off">
-        <button class="btn fijo" id="btnAddPersona">Añadir</button>
-      </div>
-      <label class="check"><input type="checkbox" id="fijoPersona"> <span id="txtFijo">Guardarla fija en la lista de este turno</span></label>
-      <p class="ayuda">Sin marcar, solo se añade a la comida de hoy (por ejemplo, alguien que viene a cubrir una guardia).</p>
     </div>
 
     <div class="card">
@@ -564,15 +559,6 @@
       if (comidasForm.has(k) && comidasForm.size === 1) return toast('Al menos una comida');
       comidasForm.has(k) ? comidasForm.delete(k) : comidasForm.add(k); render();
     })));
-
-    const lcam = $('listaCambios'); lcam.innerHTML = '';
-    if (!(t.cambios || []).length) lcam.innerHTML = '<p class="vacio" style="padding:0">Hoy no hay cambios.</p>';
-    (t.cambios || []).forEach(c => {
-      const li = document.createElement('li');
-      li.innerHTML = `<div class="info"><s>${esc(c.quien)}</s> · ${esc(c.motivo)}<small>${c.sustituto ? '→ Viene <b>' + esc(c.sustituto) + '</b>' : 'Sin sustituto'}</small></div>`;
-      const del = document.createElement('button'); del.className = 'btn-ghost'; del.textContent = '↩️'; del.title = 'Deshacer';
-      del.onclick = () => deshacerCambio(c); li.appendChild(del); lcam.appendChild(li);
-    });
 
     const lc = $('listaComidas'); lc.innerHTML = '';
     if (!t.personas.length) lc.innerHTML = '<p class="vacio">Nadie en el turno todavía.</p>';
@@ -1143,7 +1129,6 @@
     reparto.add(c.quien); if (c.sustituto) reparto.delete(c.sustituto);
     t.cambios = t.cambios.filter(x => x.id !== c.id); t.pagados = {}; t.avisados = {}; guardar(); render();
   }
-  $('btnCambio').onclick = () => abrirCambio();
   $('cOk').onclick = guardarCambio;
   $('cCancelar').onclick = () => { $('hojaCambio').hidden = true; };
 
