@@ -377,15 +377,17 @@
   const turnoDeFecha = f => { const d = Math.round((new Date(f + 'T12:00') - new Date('2026-10-01T12:00')) / 864e5); return ((d % 5) + 5) % 5 + 1; };
 
   // ---------- Estado ----------
-  const nuevoTurno = (parque = 'B1', num = turnoDeFecha(hoy()), personas = []) => ({ id: uid(), fecha: hoy(), parque, num, personas, gastos: [], pagados: {} });
+  // Por defecto: el parque y turno de quien usa el móvil; si aún no se ha identificado, B2 · Turno 4
+  const POR_DEFECTO = { parque: 'B2', num: 4 };
+  const nuevoTurno = (parque = (st && st.yo && st.yo.parque) || POR_DEFECTO.parque, num = (st && st.yo && st.yo.num) || POR_DEFECTO.num, personas = []) => ({ id: uid(), fecha: hoy(), parque, num, personas, gastos: [], pagados: {} });
   let st;
   try { st = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
   const primeraVez = !st || !st.turno;
   if (primeraVez) st = { turno: nuevoTurno(), historial: [], moneda: 'EUR' };
   // Cada parque (B1–B7) y turno (1–5) tiene su propia plantilla de gente, con clave "B3-2"
   if (!st.plantillas) { st.plantillas = {}; if (st.plantilla) st.plantillas['B1-1'] = st.plantilla; delete st.plantilla; }
-  if (!st.turno.parque) st.turno.parque = 'B1';
-  if (!st.turno.num) st.turno.num = 1;
+  if (!st.turno.parque) st.turno.parque = POR_DEFECTO.parque;
+  if (!st.turno.num) st.turno.num = POR_DEFECTO.num;
   const clave = (parque, num) => `${parque}-${num}`;
   const plantilla = (parque = st.turno.parque, num = st.turno.num) => (st.plantillas[clave(parque, num)] ||= [...(PLANTILLA_INICIAL[clave(parque, num)] || [])]);
   const etiqueta = t => `${t.parque || 'B1'} · Turno ${t.num || 1}`;
@@ -941,7 +943,7 @@
     const t = st.turno;
     if (!t.gastos.length) return toast('No hay gastos en este turno');
     if (!confirm('¿Cerrar el turno? Se guardará en el historial y empezará uno nuevo con la misma gente.')) return;
-    st.historial.unshift(t); st.turno = nuevoTurno(t.parque); st.turno.personas = [...plantilla()];
+    st.historial.unshift(t); st.turno = nuevoTurno(t.parque, t.num); st.turno.personas = [...plantilla()];
     limpiarForm(); guardar(); render(); toast('Turno guardado en el historial');
   };
   $('btnExportar').onclick = () => copiar(JSON.stringify(st), 'Datos copiados');
@@ -981,7 +983,7 @@
   if (primeraVez) st.turno.personas = [...plantilla()];
 
   // ---------- Alta: parque, turno y persona del dueño del teléfono ----------
-  const alta = { parque: st.yo?.parque || st.turno.parque, num: st.yo?.num || st.turno.num, nombre: st.yo?.nombre || '' };
+  const alta = { parque: st.yo?.parque || POR_DEFECTO.parque, num: st.yo?.num || POR_DEFECTO.num, nombre: st.yo?.nombre || '' };
   function renderAlta() {
     const bot = (cont, items, activo, txt, fn) => { cont.innerHTML = ''; items.forEach(v => {
       const b = document.createElement('button'); b.className = v === activo ? 'on' : ''; b.innerHTML = txt(v); b.onclick = () => fn(v); cont.appendChild(b); }); };
@@ -1001,7 +1003,7 @@
     st.yo = { parque: alta.parque, num: alta.num, nombre, desde: new Date().toISOString() };
     if (!plantilla(alta.parque, alta.num).includes(nombre)) plantilla(alta.parque, alta.num).push(nombre);
     // El turno de hoy empieza en su parque
-    if (!st.turno.gastos.length) elegir(alta.parque, st.turno.num);
+    if (!st.turno.gastos.length) elegir(alta.parque, alta.num);
     guardar(); $('alta').hidden = true; render(); toast(`¡Hola, ${nombre}!`); registrarUsuario();
   };
   // ---------- Sustituciones (cambio de guardia, vacaciones, licencia…) ----------
