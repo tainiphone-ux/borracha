@@ -82,6 +82,10 @@
   details.prods div { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; }
   .btn-wa { background: #25d366; color: #fff; padding: 8px 12px; font-size: 14px; white-space: nowrap; }
   .avisado { color: var(--verde); font-size: 12px; }
+  .nube { font-size: 12px; }
+  .badge { position: absolute; top: 4px; left: calc(50% + 8px); background: var(--rojo); color: #fff; font-size: 11px; font-weight: 700; min-width: 18px; height: 18px; line-height: 18px; border-radius: 9px; padding: 0 5px; }
+  .badge[hidden] { display: none; }
+  .tag-app { font-size: 11px; background: var(--bg); border: 1px solid var(--borde); border-radius: 999px; padding: 1px 6px; color: var(--verde); white-space: nowrap; }
   .lista { list-style: none; margin: 0; padding: 0; }
   .lista li { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--borde); }
   .lista li:last-child { border-bottom: 0; }
@@ -122,6 +126,7 @@
 <header>
   <span style="font-size:26px">🚒</span>
   <h1>Borracha</h1>
+  <span class="nube" id="nube" title="Conexión">⚪</span>
   <span class="total" id="hdrTotal">0</span>
 </header>
 
@@ -263,6 +268,11 @@
     <div class="card">
       <h2>Este teléfono</h2>
       <div class="fila"><div id="yoTxt"></div><button class="btn-sec fijo" id="btnCambiarYo">Cambiar</button></div>
+      <p class="ayuda" id="nubeTxt"></p>
+    </div>
+    <div class="card">
+      <h2>Quién tiene la app</h2>
+      <ul class="lista" id="listaUsuarios"></ul>
     </div>
     <div class="card">
       <h2>Copia de seguridad</h2>
@@ -278,7 +288,7 @@
 <nav>
   <button data-s="turno" class="activa"><span class="ico">👥</span>Turno</button>
   <button data-s="gastos"><span class="ico">🧾</span>Gastos</button>
-  <button data-s="cuentas"><span class="ico">⚖️</span>Cuentas</button>
+  <button data-s="cuentas" style="position:relative"><span class="ico">⚖️</span>Cuentas<span class="badge" id="badgeCuentas" hidden></span></button>
   <button data-s="historial"><span class="ico">📚</span>Historial</button>
 </nav>
 <div class="alta" id="hojaCambio" hidden>
@@ -379,7 +389,9 @@
   const clave = (parque, num) => `${parque}-${num}`;
   const plantilla = (parque = st.turno.parque, num = st.turno.num) => (st.plantillas[clave(parque, num)] ||= [...(PLANTILLA_INICIAL[clave(parque, num)] || [])]);
   const etiqueta = t => `${t.parque || 'B1'} · Turno ${t.num || 1}`;
-  const guardar = () => { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch (e) {} };
+  const guardarLocal = () => { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch (e) {} };
+  // Guarda en el móvil y, si hay conexión, comparte el turno con el resto (ver «Conexión entre apps»)
+  const guardar = () => { guardarLocal(); if (typeof sincronizar === 'function') sincronizar(); };
 
   let editando = null;      // id del gasto en edición
   let reparto = new Set();  // personas seleccionadas en el formulario
@@ -556,12 +568,12 @@
       li.innerHTML = `<div class="info">${esc(g.concepto || 'Gasto')}<small>${txtComidas(comidasGasto(g))[0].toUpperCase() + txtComidas(comidasGasto(g)).slice(1)} · pagó <b>${esc(g.pagador)}</b> · entre ${esc(entre)}</small>${g.productos && g.productos.length ? `<details class="prods"><summary>Ver ${g.productos.length} productos</summary>${g.productos.map(x => `<div><span>${esc(x.n)}</span><span>${fmt(x.c)}</span></div>`).join('')}</details>` : ''}</div><span class="monto">${fmt(g.importe)}</span>`;
       if (g.foto) {
         const im = document.createElement('img'); im.className = 'miniatura'; im.alt = 'Factura';
-        fotoGet(g.id).then(d => { if (d) im.src = d; }).catch(() => {});
+        fotoCargar(g.id).then(d => { if (d) im.src = d; }).catch(() => {});
         im.onclick = () => verFoto(im.src); li.prepend(im);
       }
       const ed = document.createElement('button'); ed.className = 'btn-ghost'; ed.textContent = '✏️'; ed.onclick = () => editar(g);
       const del = document.createElement('button'); del.className = 'btn-ghost'; del.textContent = '🗑️';
-      del.onclick = () => { if (confirm('¿Borrar este gasto?')) { t.gastos = t.gastos.filter(x => x.id !== g.id); fotoDel(g.id).catch(() => {}); t.pagados = {}; t.avisados = {}; guardar(); render(); } };
+      del.onclick = () => { if (confirm('¿Borrar este gasto?')) { t.gastos = t.gastos.filter(x => x.id !== g.id); fotoDel(g.id).catch(() => {}); borrarGastoNube(g.id); t.pagados = {}; t.avisados = {}; guardar(); render(); } };
       li.append(ed, del); lg.appendChild(li);
     });
 
@@ -599,12 +611,29 @@
     else r.personas.forEach(p => {
       const b = r.bal[p], li = document.createElement('li');
       const tel = (st.telefonos || {})[p];
-      li.innerHTML = `<div class="info">${esc(p)}<small>${b < 0 ? 'Paga ' + fmt(-b) : b > 0 ? 'Recibe ' + fmt(b) : 'En paz'}${tel ? ' · 📱 ' + esc(tel) : ''}${t.avisados && t.avisados[p] ? ' · <span class="avisado">✓ avisado</span>' : ''}</small></div>`;
+      li.innerHTML = `<div class="info">${esc(p)} ${tieneApp(p) ? '<span class="tag-app">📱 app</span>' : ''}<small>${b < 0 ? 'Paga ' + fmt(-b) : b > 0 ? 'Recibe ' + fmt(b) : 'En paz'}${tel ? ' · 📱 ' + esc(tel) : ''}${t.avisados && t.avisados[p] ? ' · <span class="avisado">✓ avisado</span>' : ''}</small></div>`;
       const bt = document.createElement('button'); bt.className = 'btn-ghost'; bt.textContent = '📞'; bt.title = 'Guardar teléfono';
       bt.onclick = () => guardarTelefono(p);
       const wa = document.createElement('button'); wa.className = 'btn btn-wa'; wa.textContent = 'WhatsApp';
       wa.onclick = () => avisar(t, p);
       li.append(bt, wa); la.appendChild(li);
+    });
+
+    // Contador en Cuentas: pagos que me tocan hacer o confirmar
+    const yoN = st.yo && st.yo.nombre;
+    const pendientes = r.pagos.filter(p => (p.de === yoN && estadoPago(t, p.de + '>' + p.a) === 'pendiente') || (p.a === yoN && estadoPago(t, p.de + '>' + p.a) === 'pagado')).length;
+    $('badgeCuentas').hidden = !pendientes; $('badgeCuentas').textContent = pendientes;
+
+    // Quién tiene la app, agrupado por parque y turno
+    const lu = $('listaUsuarios'); lu.innerHTML = '';
+    const grupos = {};
+    Object.values(usuarios).forEach(u => { (grupos[`${u.parque} · Turno ${u.num}`] ||= []).push(u.nombre); });
+    const claves = Object.keys(grupos).sort();
+    if (!claves.length) lu.innerHTML = `<p class="vacio">${db ? 'Todavía nadie más.' : 'Se ve cuando hay conexión.'}</p>`;
+    claves.forEach(k => {
+      const li = document.createElement('li');
+      li.innerHTML = `<div class="info"><b>${esc(k)}</b><small>${[...new Set(grupos[k])].map(esc).join(', ')}</small></div><span class="monto">${new Set(grupos[k]).size}</span>`;
+      lu.appendChild(li);
     });
 
     const lb = $('listaBalances'); lb.innerHTML = '';
@@ -670,14 +699,16 @@
   const fotoSet = (id, d) => fotoOp('readwrite', s => s.put(d, id));
   const fotoDel = id => fotoOp('readwrite', s => s.delete(id));
 
-  // Reduce la foto a ~1400 px en JPEG para que ocupe poco
+  // Reduce la foto a ~1200 px en JPEG para que ocupe poco y se pueda compartir
   const comprimir = file => new Promise((res, rej) => {
     const url = URL.createObjectURL(file), img = new Image();
     img.onload = () => {
-      const k = Math.min(1, 1400 / Math.max(img.width, img.height));
+      const k = Math.min(1, 1200 / Math.max(img.width, img.height));
       const c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
       c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-      URL.revokeObjectURL(url); res(c.toDataURL('image/jpeg', 0.75));
+      URL.revokeObjectURL(url);
+      let d = c.toDataURL('image/jpeg', 0.7); if (d.length > 850000) d = c.toDataURL('image/jpeg', 0.45);
+      res(d);
     };
     img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('imagen')); };
     img.src = url;
@@ -770,7 +801,7 @@
     editando = g.id; $('gConcepto').value = g.concepto; $('gImporte').value = (g.importe / 100).toString().replace('.', ',');
     reparto = new Set(g.entre); comidasForm = new Set(comidasGasto(g)); render(); $('gPagador').value = g.pagador;
     productosForm = (g.productos || []).map(x => ({ ...x })); renderProductos();
-    ponerFoto(null); if (g.foto) fotoGet(g.id).then(d => { if (editando === g.id) ponerFoto(d || null); }).catch(() => {});
+    ponerFoto(null); if (g.foto) fotoCargar(g.id).then(d => { if (editando === g.id) ponerFoto(d || null); }).catch(() => {});
     $('tituloForm').textContent = 'Editar gasto'; $('btnGuardarGasto').textContent = 'Guardar cambios';
     $('btnCancelarEdicion').style.display = 'block'; window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -782,9 +813,11 @@
     if (!(importe > 0)) return toast('Pon un importe válido');
     if (!$('gPagador').value) return toast('Elige quién pagó la compra');
     if (!reparto.size) return toast('Elige entre quién se reparte');
-    const g = { id: editando || uid(), concepto: $('gConcepto').value.trim(), importe, pagador: $('gPagador').value, entre: [...reparto], comidas: [...comidasForm].sort(), foto: !!fotoForm,
+    const previo = editando && t.gastos.find(x => x.id === editando);
+    const g = { id: editando || uid(), creado: (previo && previo.creado) || Date.now(), por: st.yo ? st.yo.nombre : '', concepto: $('gConcepto').value.trim(), importe, pagador: $('gPagador').value, entre: [...reparto], comidas: [...comidasForm].sort(), foto: !!fotoForm,
       productos: productosForm.filter(x => x.n.trim() || x.c).map(x => ({ n: x.n.trim() || 'Producto', c: x.c || 0 })) };
-    if (fotoForm) fotoSet(g.id, fotoForm).catch(() => toast('No se pudo guardar la foto')); else fotoDel(g.id).catch(() => {});
+    if (fotoForm) { fotoSet(g.id, fotoForm).catch(() => toast('No se pudo guardar la foto')); subirFoto(g.id, fotoForm); }
+    else { fotoDel(g.id).catch(() => {}); if (previo && previo.foto) borrarFotoNube(g.id); }
     if (editando) t.gastos = t.gastos.map(x => x.id === editando ? g : x); else t.gastos.push(g);
     t.pagados = {}; t.avisados = {};
     toast(editando ? 'Gasto actualizado' : 'Gasto añadido');
@@ -833,11 +866,13 @@
   function marcarPagado(t, p) {
     const k = `${p.de}>${p.a}`;
     t.pagados[k] = { pagado: new Date().toISOString() }; guardar(); render();
+    if (tieneApp(p.a)) return toast(`${saludo(p.a)} lo verá en su app para confirmarlo`);
     abrirWa(p.a, `Hola ${saludo(p.a)} 👋\n💸 Te he pagado ${fmt(p.c)} de la comida del turno ${etiqueta(t)} – ${fechaTxt(t.fecha)}.\n\n¿Me confirmas que te ha llegado? Márcalo como recibido en Borracha 🚒\n— ${p.de}`);
   }
   function confirmarPago(t, p) {
     const k = `${p.de}>${p.a}`;
     t.pagados[k] = { ...(t.pagados[k] === true ? {} : t.pagados[k]), confirmado: new Date().toISOString() }; guardar(); render();
+    if (tieneApp(p.de)) return toast(`Confirmado. ${saludo(p.de)} lo verá en su app`);
     abrirWa(p.de, `Hola ${saludo(p.de)} 👋\n✅ Confirmado: he recibido tus ${fmt(p.c)} de la comida del turno ${etiqueta(t)} – ${fechaTxt(t.fecha)}. ¡Gracias!\n— ${p.a}`);
     toast('Pago confirmado');
   }
@@ -967,7 +1002,7 @@
     if (!plantilla(alta.parque, alta.num).includes(nombre)) plantilla(alta.parque, alta.num).push(nombre);
     // El turno de hoy empieza en su parque
     if (!st.turno.gastos.length) elegir(alta.parque, st.turno.num);
-    guardar(); $('alta').hidden = true; render(); toast(`¡Hola, ${nombre}!`);
+    guardar(); $('alta').hidden = true; render(); toast(`¡Hola, ${nombre}!`); registrarUsuario();
   };
   // ---------- Sustituciones (cambio de guardia, vacaciones, licencia…) ----------
   const MOTIVOS = ['Cambio de guardia', 'Vacaciones', 'Licencia', 'Baja', 'Otro'];
@@ -1015,7 +1050,118 @@
   $('btnCambiarYo').onclick = abrirAlta;
   if (!st.yo) abrirAlta();
 
+  // ---------- Conexión entre apps (Firebase: Firestore + acceso anónimo) ----------
+  // Cada turno se comparte en turnos/{parque}_{fecha}_T{turno}; las fotos en fotos/{gasto}; quién tiene la app en usuarios/{id}.
+  const FB_CONFIG = {
+    apiKey: 'AIzaSyAn6-jJShRJX6pZhZzGsK5r2HHXRnJ_8eM',
+    authDomain: 'borracha-93698.firebaseapp.com',
+    projectId: 'borracha-93698',
+    storageBucket: 'borracha-93698.firebasestorage.app',
+    messagingSenderId: '574903666414',
+    appId: '1:574903666414:web:aab8c3b3305346c08495ff'
+  };
+  let db = null, miUid = null, docActual = null, desuscribir = null, usuarios = {}, tSubir = null;
+  const idTurno = t => `${t.parque}_${t.fecha}_T${t.num}`;
+  const tieneApp = nombre => Object.values(usuarios).some(u => u.nombre === nombre);
+  function estadoNube(ico, txt) { $('nube').textContent = ico; $('nube').title = txt; $('nubeTxt').textContent = ico + ' ' + txt; }
+
+  async function iniciarNube() {
+    estadoNube('🟡', 'Conectando…');
+    try {
+      for (const m of ['app', 'auth', 'firestore']) await cargarScript(`https://www.gstatic.com/firebasejs/10.12.2/firebase-${m}-compat.js`);
+      firebase.initializeApp(FB_CONFIG);
+      const fs = firebase.firestore();
+      try { await fs.enablePersistence({ synchronizeTabs: true }); } catch (e) {}
+      miUid = (await firebase.auth().signInAnonymously()).user.uid;
+      db = fs;
+      estadoNube('🟢', 'Conectado: los del mismo parque y turno veis lo mismo');
+      registrarUsuario(); escucharUsuarios(); escucharTurno();
+    } catch (e) {
+      estadoNube('⚪', 'Sin conexión: los datos se guardan solo en este móvil');
+    }
+  }
+
+  // Tras cada cambio local: si cambió el parque/fecha/turno nos enganchamos al nuevo; si no, subimos los cambios
+  function sincronizar() {
+    if (!db) return;
+    if (idTurno(st.turno) !== docActual) return escucharTurno();
+    clearTimeout(tSubir); tSubir = setTimeout(subirTurno, 300);
+  }
+
+  function subirTurno() {
+    if (!db || !st.yo) return;  // nada se comparte hasta que la persona se identifica
+    const t = st.turno, gastos = {};
+    t.gastos.forEach(g => { gastos[g.id] = g; });
+    const datos = { parque: t.parque, num: t.num, fecha: t.fecha, personas: t.personas, comidas: t.comidas || {}, cambios: t.cambios || [],
+      pagados: t.pagados || {}, gastos, actualizado: firebase.firestore.FieldValue.serverTimestamp(), por: st.yo ? st.yo.nombre : '' };
+    // Los gastos se fusionan uno a uno (para no pisar los que añade otro a la vez); el resto se reemplaza
+    const campos = ['parque', 'num', 'fecha', 'personas', 'comidas', 'cambios', 'pagados', 'actualizado', 'por', ...t.gastos.map(g => 'gastos.' + g.id)];
+    db.collection('turnos').doc(idTurno(t)).set(datos, { mergeFields: campos }).catch(e => estadoNube('⚠️', 'No se pudo guardar en la nube: ' + e.code));
+  }
+
+  function escucharTurno() {
+    if (!db) return;
+    if (desuscribir) desuscribir();
+    const id = idTurno(st.turno); docActual = id;
+    let primera = true;
+    desuscribir = db.collection('turnos').doc(id).onSnapshot(snap => {
+      if (id !== docActual || snap.metadata.hasPendingWrites) return;
+      if (!snap.exists) { if (primera && st.turno.gastos.length) subirTurno(); primera = false; return; }
+      aplicarRemoto(snap.data(), primera); primera = false;
+    }, e => estadoNube('⚠️', 'Error de conexión: ' + e.code));
+  }
+
+  function aplicarRemoto(r, primera) {
+    const t = st.turno, yo = st.yo && st.yo.nombre;
+    const remotos = Object.values(r.gastos || {});
+    // La primera vez, los gastos que solo están en este móvil se suben
+    const soloAqui = primera ? t.gastos.filter(g => !(r.gastos || {})[g.id]) : [];
+    // Avisos dentro de la app
+    if (!primera) {
+      const antes = t.pagados || {}, ahora = r.pagados || {};
+      const imp = calcular({ ...t, gastos: remotos, personas: r.personas || t.personas, comidas: r.comidas || {} }).pagos;
+      imp.forEach(p => {
+        const k = `${p.de}>${p.a}`, a0 = antes[k] || {}, a1 = ahora[k] || {};
+        if (p.a === yo && a1.pagado && !a0.pagado) toast(`💸 ${saludo(p.de)} dice que te ha pagado ${fmt(p.c)}. Confírmalo en Cuentas`);
+        if (p.de === yo && a1.confirmado && !a0.confirmado) toast(`✅ ${saludo(p.a)} ha confirmado tu pago de ${fmt(p.c)}`);
+      });
+      remotos.filter(g => !t.gastos.some(x => x.id === g.id) && g.por !== yo).forEach(g => toast(`🧾 ${saludo(g.pagador)} ha añadido ${g.concepto || 'un gasto'}: ${fmt(g.importe)}`));
+    }
+    if (r.personas) t.personas = r.personas;
+    t.comidas = r.comidas || {}; t.cambios = r.cambios || []; t.pagados = r.pagados || {};
+    t.gastos = [...remotos, ...soloAqui].sort((a, b) => (a.creado || 0) - (b.creado || 0));
+    reparto = new Set([...reparto].filter(n => t.personas.includes(n)));
+    guardarLocal(); render();
+    if (soloAqui.length) subirTurno();
+  }
+
+  function borrarGastoNube(id) {
+    if (!db) return;
+    db.collection('turnos').doc(idTurno(st.turno)).update({ ['gastos.' + id]: firebase.firestore.FieldValue.delete() }).catch(() => {});
+    borrarFotoNube(id);
+  }
+  function subirFoto(id, d) { if (db) db.collection('fotos').doc(id).set({ d, turno: idTurno(st.turno) }).catch(() => toast('La foto no se pudo compartir')); }
+  function borrarFotoNube(id) { if (db) db.collection('fotos').doc(id).delete().catch(() => {}); }
+  // Busca la foto en el móvil y, si no está, en la nube (y la guarda para la próxima vez)
+  async function fotoCargar(id) {
+    let d = null; try { d = await fotoGet(id); } catch (e) {}
+    if (!d && db) { try { const s = await db.collection('fotos').doc(id).get(); d = s.exists ? s.data().d : null; if (d) fotoSet(id, d).catch(() => {}); } catch (e) {} }
+    return d;
+  }
+
+  function registrarUsuario() {
+    if (!db || !st.yo) return;
+    db.collection('usuarios').doc(miUid).set({ nombre: st.yo.nombre, parque: st.yo.parque, num: st.yo.num,
+      desde: st.yo.desde || '', visto: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true }).catch(() => {});
+  }
+  function escucharUsuarios() {
+    db.collection('usuarios').onSnapshot(q => {
+      usuarios = {}; q.forEach(d => { usuarios[d.id] = d.data(); }); render();
+    }, () => {});
+  }
+
   limpiarForm(); render();
+  iniciarNube();
 })();
 </script>
 </body>
