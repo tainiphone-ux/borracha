@@ -27,7 +27,7 @@
   header { background: linear-gradient(135deg, var(--rojo), var(--rojo-osc)); color: #fff;
     padding: calc(env(safe-area-inset-top) + 14px) 16px 14px; position: sticky; top: 0; z-index: 5;
     display: flex; align-items: center; gap: 10px; }
-  header h1 { font-size: 19px; margin: 0; flex: 1; }
+  header h1 { font-size: 17px; margin: 0; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   header .total { font-weight: 700; font-size: 18px; background: rgba(0,0,0,.2); padding: 4px 10px; border-radius: 999px; }
   main { padding: 16px 16px calc(env(safe-area-inset-bottom) + 90px); max-width: 640px; margin: 0 auto; }
   section { display: none; } section.activa { display: block; }
@@ -100,6 +100,10 @@
   .sugerencias li:active, .sugerencias li:hover { background: var(--bg); }
   .sugerencias small { display: block; color: var(--sub); font-size: 12px; }
   .sugerencias mark { background: transparent; color: var(--rojo); font-weight: 700; }
+  .dos-botones { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .dos-botones[hidden] { display: none; }
+  .grande { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 30px; padding: 16px 8px; border-radius: 14px; }
+  .grande span { font-size: 15px; }
   .lista { list-style: none; margin: 0; padding: 0; }
   .lista li { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--borde); }
   .lista li:last-child { border-bottom: 0; }
@@ -207,7 +211,10 @@
   <section id="s-gastos">
     <div class="card">
       <h2 id="tituloForm">Nuevo gasto</h2>
-      <button class="btn-sec btn-full" id="btnFoto" style="margin-top:0">📷 Foto de la factura</button>
+      <div class="dos-botones" id="botonesInicio">
+        <button class="btn grande" id="btnFoto">📷<span>Foto de la factura</span></button>
+        <button class="btn-sec grande" id="btnManual">✍️<span>Añadir a mano</span></button>
+      </div>
       <input type="file" id="inFoto" accept="image/*" capture="environment" hidden>
       <div id="fotoZona" hidden>
         <img id="fotoPrev" class="foto-prev" alt="Factura">
@@ -215,7 +222,7 @@
       </div>
       <p class="ocr-estado" id="ocrEstado" hidden></p>
       <div id="productosZona" hidden>
-        <label>Productos de la factura <span style="font-weight:400">(revisa y corrige si hace falta)</span></label>
+        <label id="tituloProductos">Productos de la factura <span style="font-weight:400">(revisa y corrige si hace falta)</span></label>
         <ul class="lista prods-edit" id="listaProductos"></ul>
         <div class="fila">
           <button class="btn-ghost fijo" id="btnAddProd">+ Producto</button>
@@ -742,7 +749,7 @@
 
   function ponerFoto(d) {
     fotoForm = d;
-    $('fotoZona').hidden = !d; $('btnFoto').hidden = !!d;
+    $('fotoZona').hidden = !d; $('botonesInicio').hidden = !!d || modoManual;
     if (d) $('fotoPrev').src = d; else $('fotoPrev').removeAttribute('src');
   }
   function verFoto(src) { if (!src) return; $('visorImg').src = src; $('visor').hidden = false; }
@@ -797,7 +804,10 @@
 
   function renderProductos() {
     const ul = $('listaProductos'); ul.innerHTML = '';
-    $('productosZona').hidden = !productosForm.length && $('ocrEstado').hidden;
+    $('productosZona').hidden = !productosForm.length && $('ocrEstado').hidden && !modoManual;
+    const manual = modoManual && !fotoForm;
+    $('tituloProductos').firstChild.textContent = manual ? 'Productos y precios (opcional) ' : 'Productos de la factura ';
+    $('tituloProductos').lastChild.hidden = manual;
     productosForm.forEach((x, i) => {
       const li = document.createElement('li');
       const n = document.createElement('input'); n.className = 'p-nombre'; n.value = x.n; n.placeholder = 'Producto';
@@ -815,7 +825,9 @@
       : '';
   }
 
+  let modoManual = false;  // el usuario eligió apuntar la compra a mano
   function limpiarForm() {
+    modoManual = false; $('botonesInicio').hidden = false;
     editando = null; $('gConcepto').value = ''; $('gImporte').value = ''; $('gPagador').value = ''; ponerFoto(null);
     reparto = new Set(st.turno.personas); comidasForm = new Set(['A', 'C']);
     productosForm = []; renderProductos(); $('ocrEstado').hidden = true;
@@ -834,7 +846,9 @@
 
   function guardarGasto() {
     const t = st.turno;
-    const importe = parse($('gImporte').value);
+    // Si no se puso importe pero sí productos con precio, el importe es su suma
+    const sumaProds = productosForm.reduce((a, x) => a + (x.c || 0), 0);
+    const importe = $('gImporte').value.trim() ? parse($('gImporte').value) : sumaProds;
     if (!t.personas.length) return toast('Primero añade gente al turno');
     if (!(importe > 0)) return toast('Pon un importe válido');
     if (!$('gPagador').value) return toast('Elige quién pagó la compra');
@@ -955,6 +969,11 @@
     try { ponerFoto(await comprimir(f)); }
     catch (err) { return toast('No se pudo leer la foto'); }
     leerFactura(f);
+  };
+  $('btnManual').onclick = () => {
+    modoManual = true; $('botonesInicio').hidden = true;
+    if (!productosForm.length) productosForm.push({ n: '', c: 0 });
+    renderProductos(); $('gConcepto').focus();
   };
   $('btnAddProd').onclick = () => { productosForm.push({ n: '', c: 0 }); renderProductos(); $('listaProductos').lastChild.querySelector('input').focus(); };
   $('btnUsarSuma').onclick = () => { const s = productosForm.reduce((a, x) => a + (x.c || 0), 0); if (s > 0) { $('gImporte').value = (s / 100).toFixed(2).replace('.', ','); renderProductos(); } };
@@ -1242,7 +1261,8 @@
   }
 
   limpiarForm(); render();
-  iniciarNube();
+  // ?nube=0 abre la app sin conexión (para pruebas sin tocar los datos compartidos)
+  if (/[?&]nube=0/.test(location.search)) estadoNube('⚪', 'Modo prueba: sin conexión'); else iniciarNube();
 })();
 </script>
 </body>
