@@ -318,14 +318,11 @@
 <div class="alta" id="hojaCambio" hidden>
   <div class="alta-caja">
     <h2 style="margin:0 0 4px">🔄 Sustituir a una persona</h2>
-    <p class="ayuda">Para cambios de guardia, vacaciones, licencias o bajas.</p>
     <div id="cQuienFijo" class="quien-fijo" hidden></div>
     <div id="cQuienSel">
       <label for="cQuien">¿Quién no viene?</label>
       <select id="cQuien"></select>
     </div>
-    <label>Motivo</label>
-    <div class="chips" id="cMotivo"></div>
     <label for="cSust">¿Quién viene en su lugar?</label>
     <div class="buscador">
       <input id="cSust" placeholder="Empieza a escribir un nombre…" autocomplete="off" autocapitalize="words">
@@ -523,7 +520,7 @@
     const ct = $('chipsTurno'); ct.innerHTML = '';
     if (!plantilla().length) ct.innerHTML = '<p class="vacio">Añade a tus compañeros/as abajo.</p>';
     const ausencia = n => (t.cambios || []).find(c => c.quien === n && !t.personas.includes(n));
-    plantilla().forEach(n => ct.appendChild(chip(ausencia(n) ? `${n} · ${ausencia(n).motivo.toLowerCase()}` : n, t.personas.includes(n), () => abrirMenuPersona(n))));
+    plantilla().forEach(n => ct.appendChild(chip(ausencia(n) ? `${n} · no viene` : n, t.personas.includes(n), () => abrirMenuPersona(n))));
     // Personas que no son de la lista fija (sustitutos, visitas…): borde discontinuo
     t.personas.filter(n => !plantilla().includes(n)).forEach(n => {
       const c = chip(n, true, () => abrirMenuPersona(n));
@@ -855,7 +852,7 @@
     let s = `🚒 Borracha – comida del turno – ${fechaTxt(t.fecha)} (${etiqueta(t)})\n`;
     if (st.yo) s += `Enviado por ${st.yo.nombre}\n`;
     s += `Total: ${fmt(r.total)} · ${t.personas.length} personas\n`;
-    if ((t.cambios || []).length) s += `\n🔄 Cambios:\n` + t.cambios.map(c => `• ${c.quien} (${c.motivo.toLowerCase()})${c.sustituto ? ' → ' + c.sustituto : ''}\n`).join('');
+    if ((t.cambios || []).length) s += `\n🔄 Cambios:\n` + t.cambios.map(c => `• ${c.quien}${c.sustituto ? ' → ' + c.sustituto : ' no viene'}\n`).join('');
     s += `\n🧾 Gastos:\n`;
     t.gastos.forEach(g => s += `• ${g.concepto || 'Gasto'} [${txtComidas(comidasGasto(g))}]: ${fmt(g.importe)} (pagó ${g.pagador})${g.foto ? ' 🧾' : ''}\n${(g.productos || []).map(x => `    – ${x.n}: ${fmt(x.c)}\n`).join('')}`);
     s += `\n💸 Pagos:\n`;
@@ -1035,9 +1032,7 @@
     if (!st.turno.gastos.length) elegir(alta.parque, alta.num);
     guardar(); $('alta').hidden = true; render(); toast(`¡Hola, ${nombre}!`); registrarUsuario();
   };
-  // ---------- Sustituciones (cambio de guardia, vacaciones, licencia…) ----------
-  const MOTIVOS = ['Cambio de guardia', 'Vacaciones', 'Licencia', 'Baja', 'Otro'];
-  let motivoSel = MOTIVOS[0];
+  // ---------- Sustituciones: alguien no viene y otra persona ocupa su sitio ----------
   function abrirCambio(quien) {
     const t = st.turno;
     if (!t.personas.length) return toast('No hay nadie en el turno');
@@ -1046,7 +1041,7 @@
     // Si viene de tocar un nombre, esa persona queda fijada
     $('cQuienFijo').hidden = !quien; $('cQuienSel').hidden = !!quien;
     if (quien) { sel.value = quien; $('cQuienFijo').innerHTML = `Sustituir a <b>${esc(quien)}</b>`; }
-    motivoSel = MOTIVOS[0]; $('cSust').value = ''; $('cSugerencias').hidden = true; renderMotivos();
+    $('cSust').value = ''; $('cSugerencias').hidden = true;
     $('hojaCambio').hidden = false; $('hojaCambio').scrollTop = 0;
     if (quien) setTimeout(() => $('cSust').focus(), 50);
   }
@@ -1093,7 +1088,7 @@
     const t = st.turno, esta = t.personas.includes(n);
     const cambio = (t.cambios || []).find(c => c.quien === n || c.sustituto === n);
     $('mpNombre').textContent = n;
-    $('mpEstado').textContent = cambio ? (cambio.quien === n ? `${cambio.motivo}${cambio.sustituto ? ' · le sustituye ' + cambio.sustituto : ''}` : `Sustituye a ${cambio.quien} (${cambio.motivo.toLowerCase()})`)
+    $('mpEstado').textContent = cambio ? (cambio.quien === n ? (cambio.sustituto ? `Le sustituye ${cambio.sustituto}` : 'Hoy no viene') : `Sustituye a ${cambio.quien}`)
       : esta ? 'Está en el turno de hoy' : 'No está en el turno de hoy';
     const acc = $('mpAcciones'); acc.innerHTML = '';
     const boton = (txt, cls, fn) => { const b = document.createElement('button'); b.className = cls; b.textContent = txt; b.onclick = () => { cerrarMenuPersona(); fn(); }; acc.appendChild(b); };
@@ -1106,10 +1101,6 @@
   function cerrarMenuPersona() { $('menuPersona').hidden = true; }
   $('mpCancelar').onclick = cerrarMenuPersona;
   $('menuPersona').onclick = e => { if (e.target === $('menuPersona')) cerrarMenuPersona(); };
-  function renderMotivos() {
-    const cm = $('cMotivo'); cm.innerHTML = '';
-    MOTIVOS.forEach(m => cm.appendChild(chip(m, m === motivoSel, () => { motivoSel = m; renderMotivos(); })));
-  }
   function guardarCambio() {
     const t = st.turno, quien = $('cQuien').value, sust = $('cSust').value.trim().replace(/\s+/g, ' ');
     if (!quien) return;
@@ -1118,9 +1109,9 @@
     t.personas = t.personas.flatMap(p => p === quien ? (sust ? [sust] : []) : [p]);
     if (sust && t.comidas && t.comidas[quien]) t.comidas[sust] = t.comidas[quien];
     reparto.delete(quien); if (sust) reparto.add(sust);
-    t.cambios = [...(t.cambios || []), { id: uid(), quien, motivo: motivoSel, sustituto: sust }];
+    t.cambios = [...(t.cambios || []), { id: uid(), quien, sustituto: sust }];
     t.pagados = {}; t.avisados = {}; guardar(); $('hojaCambio').hidden = true; render();
-    toast(sust ? `${sust} sustituye a ${quien}` : `${quien}: ${motivoSel.toLowerCase()}`);
+    toast(sust ? `${sust} sustituye a ${quien}` : `${quien} no viene`);
   }
   function deshacerCambio(c) {
     const t = st.turno;
