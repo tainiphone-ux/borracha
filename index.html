@@ -520,9 +520,15 @@
     const ct = $('chipsTurno'); ct.innerHTML = '';
     if (!plantilla().length) ct.innerHTML = '<p class="vacio">Añade a tus compañeros/as abajo.</p>';
     const ausencia = n => (t.cambios || []).find(c => c.quien === n && !t.personas.includes(n));
-    plantilla().forEach(n => ct.appendChild(chip(ausencia(n) ? `${n} · no viene` : n, t.personas.includes(n), () => abrirMenuPersona(n))));
-    // Personas que no son de la lista fija (sustitutos, visitas…): borde discontinuo
-    t.personas.filter(n => !plantilla().includes(n)).forEach(n => {
+    // Quien ha sido sustituido desaparece y su sustituto ocupa su sitio en la lista
+    const sustitutos = new Set();
+    plantilla().forEach(n => {
+      const c = ausencia(n);
+      if (!c) return ct.appendChild(chip(n, t.personas.includes(n), () => abrirMenuPersona(n)));
+      if (c.sustituto && t.personas.includes(c.sustituto)) { sustitutos.add(c.sustituto); ct.appendChild(chip(c.sustituto, true, () => abrirMenuPersona(c.sustituto))); }
+    });
+    // Personas añadidas que no son de la lista fija (visitas…): borde discontinuo
+    t.personas.filter(n => !plantilla().includes(n) && !sustitutos.has(n)).forEach(n => {
       const c = chip(n, true, () => abrirMenuPersona(n));
       c.classList.add('extra'); ct.appendChild(c);
     });
@@ -852,7 +858,6 @@
     let s = `🚒 Borracha – comida del turno – ${fechaTxt(t.fecha)} (${etiqueta(t)})\n`;
     if (st.yo) s += `Enviado por ${st.yo.nombre}\n`;
     s += `Total: ${fmt(r.total)} · ${t.personas.length} personas\n`;
-    if ((t.cambios || []).length) s += `\n🔄 Cambios:\n` + t.cambios.map(c => `• ${c.quien}${c.sustituto ? ' → ' + c.sustituto : ' no viene'}\n`).join('');
     s += `\n🧾 Gastos:\n`;
     t.gastos.forEach(g => s += `• ${g.concepto || 'Gasto'} [${txtComidas(comidasGasto(g))}]: ${fmt(g.importe)} (pagó ${g.pagador})${g.foto ? ' 🧾' : ''}\n${(g.productos || []).map(x => `    – ${x.n}: ${fmt(x.c)}\n`).join('')}`);
     s += `\n💸 Pagos:\n`;
@@ -1109,7 +1114,10 @@
     t.personas = t.personas.flatMap(p => p === quien ? (sust ? [sust] : []) : [p]);
     if (sust && t.comidas && t.comidas[quien]) t.comidas[sust] = t.comidas[quien];
     reparto.delete(quien); if (sust) reparto.add(sust);
-    t.cambios = [...(t.cambios || []), { id: uid(), quien, sustituto: sust }];
+    // Si quien se cambia ya era un sustituto, se actualiza ese cambio (el nuevo ocupa el mismo sitio)
+    const previo = (t.cambios || []).find(c => c.sustituto === quien);
+    if (previo) t.cambios = t.cambios.map(c => c === previo ? { ...c, sustituto: sust } : c);
+    else t.cambios = [...(t.cambios || []), { id: uid(), quien, sustituto: sust }];
     t.pagados = {}; t.avisados = {}; guardar(); $('hojaCambio').hidden = true; render();
     toast(sust ? `${sust} sustituye a ${quien}` : `${quien} no viene`);
   }
