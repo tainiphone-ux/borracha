@@ -1,0 +1,1022 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Borracha</title>
+<meta name="theme-color" content="#c62828">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Borracha">
+<link id="appleIcon" rel="apple-touch-icon" href="">
+<link id="favicon" rel="icon" href="">
+<link id="manifest" rel="manifest" href="">
+<style>
+  :root {
+    --rojo: #c62828; --rojo-osc: #8e0000; --ambar: #ffb300;
+    --bg: #f5f2f0; --card: #ffffff; --txt: #1d1b1a; --sub: #6b6460; --borde: #e4dedb;
+    --verde: #2e7d32; --deuda: #c62828;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #151312; --card: #221f1d; --txt: #f3efec; --sub: #a59d98; --borde: #38322f; --verde: #66bb6a; --deuda: #ef5350; }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--txt);
+    font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  header { background: linear-gradient(135deg, var(--rojo), var(--rojo-osc)); color: #fff;
+    padding: calc(env(safe-area-inset-top) + 14px) 16px 14px; position: sticky; top: 0; z-index: 5;
+    display: flex; align-items: center; gap: 10px; }
+  header h1 { font-size: 19px; margin: 0; flex: 1; }
+  header .total { font-weight: 700; font-size: 18px; background: rgba(0,0,0,.2); padding: 4px 10px; border-radius: 999px; }
+  main { padding: 16px 16px calc(env(safe-area-inset-bottom) + 90px); max-width: 640px; margin: 0 auto; }
+  section { display: none; } section.activa { display: block; }
+  .card { background: var(--card); border: 1px solid var(--borde); border-radius: 14px; padding: 14px; margin-bottom: 14px; }
+  .card h2 { font-size: 15px; margin: 0 0 10px; color: var(--sub); text-transform: uppercase; letter-spacing: .04em; }
+  label { display: block; font-size: 13px; color: var(--sub); margin: 10px 0 4px; }
+  input, select { width: 100%; font: inherit; padding: 11px 12px; border-radius: 10px; border: 1px solid var(--borde);
+    background: var(--bg); color: var(--txt); }
+  input:focus, select:focus { outline: 2px solid var(--rojo); border-color: transparent; }
+  .fila { display: flex; gap: 8px; align-items: center; }
+  .fila > * { flex: 1; } .fila > .fijo { flex: 0 0 auto; }
+  button { font: inherit; border: 0; border-radius: 10px; padding: 11px 14px; cursor: pointer; font-weight: 600; }
+  .btn { background: var(--rojo); color: #fff; }
+  .btn-sec { background: transparent; color: var(--rojo); border: 1px solid var(--rojo); }
+  .btn-ghost { background: transparent; color: var(--sub); padding: 6px 8px; }
+  .btn-full { width: 100%; margin-top: 12px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { padding: 8px 12px; border-radius: 999px; border: 1px solid var(--borde); background: var(--bg); color: var(--txt);
+    font-weight: 500; user-select: none; }
+  .chip.on { background: var(--rojo); border-color: var(--rojo); color: #fff; }
+  .turnos { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+  .turnos button { background: var(--bg); color: var(--txt); border: 1px solid var(--borde); font-size: 22px; padding: 12px 0; }
+  .turnos button small { display: block; font-size: 11px; font-weight: 500; color: var(--sub); }
+  .turnos button.on { background: var(--rojo); border-color: var(--rojo); color: #fff; }
+  .parques { grid-template-columns: repeat(7, 1fr); gap: 6px; }
+  .parques button { font-size: 16px; padding: 12px 0; }
+  .turnos button.on small { color: rgba(255,255,255,.8); }
+  .chip.extra { border-style: dashed; }
+  .chip.mas { background: transparent; border-style: dashed; color: var(--rojo); border-color: var(--rojo); }
+  label.check { display: flex; align-items: center; gap: 8px; color: var(--txt); font-size: 15px; margin-top: 12px; }
+  label.check input { width: 20px; height: 20px; accent-color: var(--rojo); }
+  .foto-prev { display: block; width: 100%; max-height: 260px; object-fit: contain; background: #000; border-radius: 10px; margin-top: 10px; }
+  .miniatura { width: 44px; height: 44px; object-fit: cover; border-radius: 8px; flex: 0 0 auto; cursor: zoom-in; background: var(--bg); }
+  .visor { position: fixed; inset: 0; background: rgba(0,0,0,.92); z-index: 20; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 16px; }
+  .visor[hidden] { display: none; }
+  .visor img { max-width: 100%; max-height: 85vh; object-fit: contain; }
+  .visor p { color: #bbb; font-size: 13px; }
+  .alta { position: fixed; inset: 0; background: var(--bg); z-index: 30; overflow-y: auto;
+    padding: calc(env(safe-area-inset-top) + 24px) 16px calc(env(safe-area-inset-bottom) + 24px); }
+  .alta[hidden] { display: none; }
+  .alta-caja { max-width: 520px; margin: 0 auto; }
+  .btn:disabled { opacity: .4; }
+  .comidas { display: flex; gap: 6px; flex: 0 0 auto; }
+  .comidas .chip { padding: 6px 10px; font-size: 14px; }
+  .ocr-estado { background: var(--bg); border-radius: 10px; padding: 10px 12px; font-size: 14px; margin: 10px 0 0; }
+  .prods-edit li { padding: 6px 0; gap: 6px; }
+  .prods-edit input { padding: 8px 10px; font-size: 15px; }
+  .prods-edit .p-nombre { flex: 1; min-width: 0; }
+  .prods-edit .p-precio { width: 84px; flex: 0 0 auto; text-align: right; }
+  details.prods { margin-top: 4px; font-size: 13px; color: var(--sub); }
+  details.prods summary { font-weight: 500; color: var(--rojo); }
+  details.prods div { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; }
+  .btn-wa { background: #25d366; color: #fff; padding: 8px 12px; font-size: 14px; white-space: nowrap; }
+  .avisado { color: var(--verde); font-size: 12px; }
+  .lista { list-style: none; margin: 0; padding: 0; }
+  .lista li { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--borde); }
+  .lista li:last-child { border-bottom: 0; }
+  .lista .info { flex: 1; min-width: 0; }
+  .lista .info small { display: block; color: var(--sub); font-size: 13px; }
+  .monto { font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .pos { color: var(--verde); } .neg { color: var(--deuda); }
+  .vacio { color: var(--sub); text-align: center; padding: 10px 0; margin: 0; }
+  .pago { display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: 12px; background: var(--bg); margin-bottom: 8px; }
+  .pago { flex-direction: column; align-items: stretch; gap: 6px; }
+  .pago-fila { display: flex; align-items: center; gap: 10px; }
+  .pago-estado { font-size: 13px; color: var(--sub); }
+  .pago-acc { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .pago-acc .btn, .pago-acc .btn-sec { padding: 8px 12px; font-size: 14px; }
+  .pago.pagado { box-shadow: inset 4px 0 0 var(--ambar); }
+  .pago.confirmado { box-shadow: inset 4px 0 0 var(--verde); }
+  .pago.confirmado .pago-fila { opacity: .6; }
+  .pago .flecha { color: var(--sub); }
+  .pago.hecho { opacity: .45; text-decoration: line-through; }
+  .pago input { width: 22px; height: 22px; flex: 0 0 auto; accent-color: var(--verde); }
+  .resumen { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; text-align: center; }
+  .resumen div { background: var(--bg); border-radius: 10px; padding: 10px 4px; }
+  .resumen b { display: block; font-size: 18px; }
+  .resumen span { font-size: 12px; color: var(--sub); }
+  nav { position: fixed; left: 0; right: 0; bottom: 0; display: flex; background: var(--card); border-top: 1px solid var(--borde);
+    padding-bottom: env(safe-area-inset-bottom); z-index: 5; }
+  nav button { flex: 1; background: none; color: var(--sub); border-radius: 0; padding: 8px 0 10px; font-size: 12px; font-weight: 500; }
+  nav button .ico { display: block; font-size: 22px; line-height: 1.2; }
+  nav button.activa { color: var(--rojo); }
+  .toast { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 80px); transform: translateX(-50%);
+    background: #222; color: #fff; padding: 10px 16px; border-radius: 999px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 10; }
+  .toast.ver { opacity: 1; }
+  .ayuda { font-size: 13px; color: var(--sub); margin: 8px 0 0; }
+  details summary { cursor: pointer; font-weight: 600; }
+</style>
+</head>
+<body>
+<header>
+  <span style="font-size:26px">🚒</span>
+  <h1>Borracha</h1>
+  <span class="total" id="hdrTotal">0</span>
+</header>
+
+<main>
+  <!-- TURNO -->
+  <section id="s-turno" class="activa">
+    <div class="card">
+      <h2>Parque de bomberos</h2>
+      <div class="turnos parques" id="selParque"></div>
+      <p class="ayuda" id="nombreParque"></p>
+      <h2 style="margin-top:16px">Turno</h2>
+      <div class="turnos" id="selTurno"></div>
+      <label for="fecha">Fecha</label><input type="date" id="fecha">
+    </div>
+
+    <div class="card">
+      <h2>¿Quién está de turno?</h2>
+      <div class="chips" id="chipsTurno"></div>
+      <p class="ayuda">Toca un nombre para incluirlo o quitarlo del turno.</p>
+    </div>
+
+    <div class="card">
+      <h2>Cambios de guardia y ausencias</h2>
+      <ul class="lista" id="listaCambios"></ul>
+      <button class="btn-sec btn-full" id="btnCambio" style="margin-top:6px">🔄 Sustituir a una persona</button>
+    </div>
+
+    <div class="card">
+      <h2>¿Quién almuerza y quién cena?</h2>
+      <ul class="lista" id="listaComidas"></ul>
+      <p class="ayuda">Quien solo almuerza o solo cena paga solo la parte de esa comida.</p>
+    </div>
+
+    <div class="card">
+      <h2>➕ Añadir persona</h2>
+      <div class="fila">
+        <input id="nuevoNombre" placeholder="Nombre y apellido" autocomplete="off">
+        <button class="btn fijo" id="btnAddPersona">Añadir</button>
+      </div>
+      <label class="check"><input type="checkbox" id="fijoPersona"> <span id="txtFijo">Guardarla fija en la lista de este turno</span></label>
+      <p class="ayuda">Sin marcar, solo se añade a la comida de hoy (por ejemplo, alguien que viene a cubrir una guardia).</p>
+    </div>
+
+    <div class="card">
+      <details>
+        <summary>Gestionar gente de este turno</summary>
+        <ul class="lista" id="listaPlantilla" style="margin-top:8px"></ul>
+        <label for="moneda">Moneda</label>
+        <select id="moneda">
+          <option value="EUR">Euro (€)</option>
+          <option value="USD">Dólar (US$)</option>
+          <option value="ARS">Peso argentino ($)</option>
+          <option value="MXN">Peso mexicano ($)</option>
+          <option value="CLP">Peso chileno ($)</option>
+          <option value="COP">Peso colombiano ($)</option>
+          <option value="UYU">Peso uruguayo ($)</option>
+          <option value="PEN">Sol (S/)</option>
+        </select>
+      </details>
+    </div>
+  </section>
+
+  <!-- GASTOS -->
+  <section id="s-gastos">
+    <div class="card">
+      <h2 id="tituloForm">Nuevo gasto</h2>
+      <button class="btn-sec btn-full" id="btnFoto" style="margin-top:0">📷 Foto de la factura</button>
+      <input type="file" id="inFoto" accept="image/*" capture="environment" hidden>
+      <div id="fotoZona" hidden>
+        <img id="fotoPrev" class="foto-prev" alt="Factura">
+        <div class="fila"><button class="btn-ghost" id="btnCambiarFoto">🔄 Repetir foto</button><button class="btn-ghost" id="btnQuitarFoto">✕ Quitar foto</button></div>
+      </div>
+      <p class="ocr-estado" id="ocrEstado" hidden></p>
+      <div id="productosZona" hidden>
+        <label>Productos de la factura <span style="font-weight:400">(revisa y corrige si hace falta)</span></label>
+        <ul class="lista prods-edit" id="listaProductos"></ul>
+        <div class="fila">
+          <button class="btn-ghost fijo" id="btnAddProd">+ Producto</button>
+          <button class="btn-ghost fijo" id="btnUsarSuma" style="margin-left:auto">Usar la suma como importe</button>
+        </div>
+        <p class="ayuda" id="sumaProd"></p>
+      </div>
+      <label for="gConcepto">Concepto</label>
+      <input id="gConcepto" placeholder="Ej: Súper, pizzas, pan…" autocomplete="off">
+      <div class="fila">
+        <div><label for="gImporte">Importe</label><input id="gImporte" inputmode="decimal" placeholder="0,00"></div>
+        <div><label for="gPagador">Pagó</label><select id="gPagador"></select></div>
+      </div>
+      <label>¿Para qué comida?</label>
+      <div class="chips" id="chipsComidaGasto"></div>
+      <label>Se reparte entre</label>
+      <div class="chips" id="chipsReparto"></div>
+      <div class="fila" style="margin-top:6px">
+        <button class="btn-ghost fijo" id="btnTodos">Todos</button>
+        <button class="btn-ghost fijo" id="btnNinguno">Ninguno</button>
+      </div>
+      <button class="btn btn-full" id="btnGuardarGasto">Añadir gasto</button>
+      <button class="btn-sec btn-full" id="btnCancelarEdicion" style="display:none">Cancelar edición</button>
+    </div>
+
+    <div class="card">
+      <h2>Gastos del turno</h2>
+      <ul class="lista" id="listaGastos"></ul>
+    </div>
+  </section>
+
+  <!-- CUENTAS -->
+  <section id="s-cuentas">
+    <div class="card">
+      <div class="resumen">
+        <div><b id="rTotal">0</b><span>Total</span></div>
+        <div><b id="rPersonas">0</b><span>Personas</span></div>
+        <div><b id="rMedia">0</b><span>Media</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Quién paga a quién</h2>
+      <div id="listaPagos"></div>
+      <button class="btn btn-full" id="btnCompartir">📤 Compartir resumen</button>
+    </div>
+    <div class="card">
+      <h2>Avisar a cada uno</h2>
+      <p class="ayuda" style="margin:0 0 6px">Envía a cada persona lo que tiene que pagar o lo que le deben. Se abre WhatsApp con el mensaje ya escrito.</p>
+      <ul class="lista" id="listaAvisos"></ul>
+    </div>
+    <div class="card">
+      <h2>Balance por persona</h2>
+      <ul class="lista" id="listaBalances"></ul>
+    </div>
+    <button class="btn-sec btn-full" id="btnCerrar">✅ Cerrar turno y empezar uno nuevo</button>
+  </section>
+
+  <!-- HISTORIAL -->
+  <section id="s-historial">
+    <div class="card">
+      <h2>Turnos anteriores</h2>
+      <ul class="lista" id="listaHistorial"></ul>
+    </div>
+    <div class="card">
+      <h2>Este teléfono</h2>
+      <div class="fila"><div id="yoTxt"></div><button class="btn-sec fijo" id="btnCambiarYo">Cambiar</button></div>
+    </div>
+    <div class="card">
+      <h2>Copia de seguridad</h2>
+      <div class="fila">
+        <button class="btn-sec" id="btnExportar">Copiar datos</button>
+        <button class="btn-sec" id="btnImportar">Pegar datos</button>
+      </div>
+      <p class="ayuda">Los datos se guardan solo en este teléfono. Usa «Copiar datos» para pasarlos a otro (las fotos de facturas no se copian).</p>
+    </div>
+  </section>
+</main>
+
+<nav>
+  <button data-s="turno" class="activa"><span class="ico">👥</span>Turno</button>
+  <button data-s="gastos"><span class="ico">🧾</span>Gastos</button>
+  <button data-s="cuentas"><span class="ico">⚖️</span>Cuentas</button>
+  <button data-s="historial"><span class="ico">📚</span>Historial</button>
+</nav>
+<div class="alta" id="hojaCambio" hidden>
+  <div class="alta-caja">
+    <h2 style="margin:0 0 4px">🔄 Sustituir a una persona</h2>
+    <p class="ayuda">Para cambios de guardia, vacaciones, licencias o bajas.</p>
+    <label for="cQuien">¿Quién no viene?</label>
+    <select id="cQuien"></select>
+    <label>Motivo</label>
+    <div class="chips" id="cMotivo"></div>
+    <label for="cSust">¿Quién viene en su lugar?</label>
+    <input id="cSust" list="todosBomberos" placeholder="Busca por nombre" autocomplete="off">
+    <datalist id="todosBomberos"></datalist>
+    <p class="ayuda">Puedes buscar a cualquiera de cualquier parque y turno, o escribir otro nombre. Déjalo vacío si no viene nadie.</p>
+    <button class="btn btn-full" id="cOk">Guardar cambio</button>
+    <button class="btn-sec btn-full" id="cCancelar">Cancelar</button>
+  </div>
+</div>
+<div class="alta" id="alta" hidden>
+  <div class="alta-caja">
+    <div style="font-size:44px;text-align:center">🚒</div>
+    <h2 style="text-align:center;margin:4px 0">¿Quién eres?</h2>
+    <p class="ayuda" style="text-align:center">Elige tu parque, tu turno y tu nombre. Así sabremos quién tiene la app en cada teléfono.</p>
+    <label>Parque</label>
+    <div class="turnos parques" id="altaParque"></div>
+    <p class="ayuda" id="altaParqueNombre"></p>
+    <label>Turno</label>
+    <div class="turnos" id="altaTurno"></div>
+    <label>Tu nombre</label>
+    <div class="chips" id="altaPersonas"></div>
+    <input id="altaOtro" placeholder="¿No sales en la lista? Escribe tu nombre" autocomplete="off" style="margin-top:10px">
+    <button class="btn btn-full" id="altaOk" disabled>Empezar</button>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<div class="visor" id="visor" hidden><img id="visorImg" alt="Factura"><p>Toca para cerrar</p></div>
+
+<script>
+(() => {
+  const KEY = 'comida-turno-v1';
+  const $ = id => document.getElementById(id);
+  const hoy = () => { const d = new Date(); return new Date(d - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10); };
+  const uid = () => Math.random().toString(36).slice(2, 10);
+
+  const PARQUES = ['B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7'];
+  // Personal por parque y turno (listado del 16-10-2026; las vacantes son «Guardia extra»)
+  const PARQUE_NOMBRE = {"B1": "Santa Cruz de Tenerife", "B2": "La Orotava", "B3": "San Miguel de Abona (Las Chafiras)", "B4": "Icod de los Vinos", "B5": "La Laguna", "B6": "Güímar", "B7": "Guía de Isora"};
+  const PLANTILLA_INICIAL = {
+    "B1-1": ["José Inocente Bencomo González", "David Ponte-Lira Pestana", "Emilio Bolívar Sánchez-Cañete", "Manuel Rodríguez Martín", "José Carmelo Pascual Fernández", "Miguel Ángel Morales García", "Marcos Alexis León Pérez", "Daniel Herrera Negrín", "Ruymán José Expósito González", "Andrés Afonso Mendoza", "José Manuel Afonso Martín", "Cristo Moisés Acosta Martín del Río", "Guardia extra 1", "Guardia extra 2"],
+    "B1-2": ["Wimmer J. González Delgado", "Edilberto Jesús Lavín Rodríguez", "Guardia extra 1", "Airam Rodríguez Delgado", "Andrés Reyes Hernández", "Abraham Miranda Cáceres", "Damián Luis Hernández Alberto", "Isidro Felipe Pérez", "Tamarán Brito Baute", "José Vicente Baute Curbelo", "Enrico Alberto Acosta Ramos", "Daniel Hernández Cejas", "Carmelo Daniel Zerpa Armas", "Víctor Manuel Pineda Díaz"],
+    "B1-3": ["Jorge Juan Mora Hernández", "Carlos Alberto Lorenzo Herrera", "Carmelo Suárez Pérez", "Rubén Eladio Rodríguez Vera", "Glendor Rodríguez Hernández", "David Pérez Pérez", "Ildefonso Martínez Siverio", "Salvador López-Peñalver Hernández", "Ramón Juan Darias Fariña", "Ricardo Berlanga López", "Juan Víctor Yanes Díaz", "Juan Manuel Martín Remón", "Benjamín García Hernández", "Iván Domínguez Tejera"],
+    "B1-4": ["Carlos García de la Rosa", "Guardia extra 1", "Guardia extra 2", "Jonathan Pérez Melián", "Ismael Rodríguez Baute", "Enrique Luis Aznar", "Ezequiel Borges Castañeda", "Juan Ramón Rodríguez Zamora", "Sergio González Rodríguez", "Óscar Pérez Afonso", "Ángel del Castillo Torralba", "Daniel Cabrera Estévez", "Guardia extra 3", "Sergio Alejandro Díaz Luque"],
+    "B1-5": ["Rafael Fernández Fernández", "Rafael Marcos León", "Jaime Tomás López Betancort", "Yapci Rodríguez Hernández", "Ricardo Peña Pérez", "Carlos Hernández González", "José Fernando Domínguez Fuentes", "Balbino Carrasco Pérez", "José Acuña Díaz", "Miguel Puerta Rodríguez", "Eduardo Muñoz Betolaza", "Antonio Mario Castillo Hernández", "Vicente Alexis Alonso González", "Víctor San Baudelio Pérez"],
+    "B2-1": ["Alberto Betancor Orgaz", "Sergio González de León", "Enrique Jesús de la Rosa Gómez", "Oliver González de León", "Miguel Ángel González Pérez", "Sergio Mielgo Martínez", "Víctor Alejandro Arroyo Santana", "José Víctor Padilla García"],
+    "B2-2": ["Guardia extra 1", "José Ignacio Delgado Martín", "Víctor Manuel Abrante Salcedo", "Juan Carlos Batista Álvarez", "Óscar Cabrera Panadero", "Juan Pedro Ceballo Rodríguez", "David Oliver Dreyer Cabezón", "Jesús Benjamín Espila Sánchez"],
+    "B2-3": ["Ricardo Palomares González", "Manuel Gómez Feliciano", "Borja Carballo Hernández", "Eduardo Hernández Medina", "César Davara González", "Abraham Fariña Coello", "Jesús David Vera Torres", "Guardia extra 1"],
+    "B2-4": ["Valentín Suárez Morín", "Felipe Betancor Orgaz", "Samuel Benito Chávez Torres", "Guillermo Díaz Ríos", "Añaterve García Vera", "Antonio Reche Pérez", "José Allgayer Rodríguez", "Luis Javier Álvarez Insua"],
+    "B2-5": ["Augusto Remón Carballo", "Fernando Batista Álvarez", "Guardia extra 1", "Isidro Falcón González", "Pedro Luis García González", "Pedro Luciano González Quintero", "Juan Miguel Alemán González", "Héctor Quintana Ojeda"],
+    "B3-1": ["Juan José de Cáceres Serra", "Juan Antonio Sosa Regalado", "Amilcar Borges Rodríguez", "Antonio Nogueira Gutiérrez", "David Cuéllar Estévez", "David Ramallo Padrón", "Ubay Báez Barroso", "Oliver Mesa Evans"],
+    "B3-2": ["Ramón Morín García", "José Alberto Gómez Gómez", "Federico Angulo Casado", "Oliverio Delgado Aguiar", "Manuel Borges Márquez", "Carlos Alberto Orenes Castellano", "Javier Andrés Pérez de la Rosa", "Darío Triviño Luque"],
+    "B3-3": ["José Zebensuí Riquelme Gómez", "Gonzalo Chávez Real", "Omar Prieto Chico", "Josué de Vera Rodríguez", "José Manuel Sevilla Moyano", "Jerónimo de Armas Fernández", "Álvaro Cruz Pérez", "Guardia extra 1"],
+    "B3-4": ["Guardia extra 1", "Miguel Díaz Ruiz", "Adrián Joel Cruz Hernández", "Imobach Adasat Estévez Camacho", "Yeray Cabrera Hernández", "Daniel José Perdomo Alonso", "Ancor Rodal Delgado", "Guardia extra 2"],
+    "B3-5": ["Raúl Montes García", "Juan Luis Peraza Santana", "Diego Costumero Núñez", "Francisco Javier Sevillano Heras", "Cristóbal Jesús Gil Martín", "Joel Delgado Moseguez", "Roberto Mira García", "Mariano Eduardo Alonso Melián"],
+    "B4-1": ["Maximino Delgado Hernández", "Daniel Rosquete Rodríguez", "Guardia extra 1", "Guardia extra 2"],
+    "B4-2": ["David Armas de León", "Gregorio Álvaro Martínez", "Jonathan González Luis", "Alejandro Antonio de Furundarena González de Chaves"],
+    "B4-3": ["José Manuel Molina León", "Sergio Leandro Rodríguez", "Marco Antonio Mejías León", "Juan José Pérez Toledo"],
+    "B4-4": ["Jorge Pérez Cabrera", "Pedro Jesús Castro Rodríguez", "Eduardo Cabello Acevedo", "Héctor Castro Alonso"],
+    "B4-5": ["Jorge Rayco González Afonso", "Jesús Ignacio Martínez Camarero", "Jorge Práxedes Herrera", "Gerován Abreu Pérez"],
+    "B5-1": ["Rubén Pérez Hernández", "Víctor Hernández Navarro", "Alberto Campos Marichal", "Juan Casanova González", "Juan José Cruz Pérez", "Ángel David de Francisco Hernández", "Manuel Carlos Tejera Rodríguez", "Roberto Torres Expósito"],
+    "B5-2": ["David Díaz Francisco", "Alejandro Marichal Torres", "Airam Afonso Henríquez", "Bernardo López Núñez", "Antonio Morales Navarro", "José Carlos Pérez García", "Enrique Rodríguez Rodríguez", "Rafael Fernández Alvarado"],
+    "B5-3": ["Fernando López Betancor", "Iván Francisco Padrón Peñalver", "Briac Badt Abad", "Guardia extra 1", "Moisés González Suárez", "Jesús María Perera Rodríguez", "Josué Rodríguez Armas", "Patxi Otamendi Burgui"],
+    "B5-4": ["Andrés Perdomo Perdomo", "Salvador Peraza Santana", "Jesús Luis Puerta García", "Salvador García Toledano", "Juan Antonio Ruano Burgos", "Elicio Treviño Sánchez", "Xerach Afonso Rodríguez", "Guardia extra 1"],
+    "B5-5": ["Andrés de la Rosa Hernández", "Juan José de la Rosa Hernández", "Eusebio Carlos Delgado González", "Luis Miguel Delgado Martín", "David Milla Alonso", "José Montserrat Expósito Rosado", "Asier Amador Robayna", "Cristóbal de la Rosa Rodríguez"],
+    "B6-1": ["Rodolfo Fernández Revenga", "Francisco González Salguero", "Daniel Francisco Mora Navarro", "David Benavente Expósito"],
+    "B6-2": ["Francisco Alberto Marrero Conde", "David Hernández Cabrera", "Jonathan Rodríguez Castellano", "Armando Alby Bailón Quesada"],
+    "B6-3": ["Antonio Luis Morales Pérez", "Pedro Azuaga Toré", "David Román Lillo", "Guardia extra 1"],
+    "B6-4": ["Oliver Losada Roque", "Paulo Cabrera Robayna", "Reinaldo Delgado Gil", "Pedro José Valladares Pérez"],
+    "B6-5": ["Teófilo Rodríguez Rodríguez", "Jonay Hernández Torres", "Andrés Alejandro López Martín", "José Luis González Martín"],
+    "B7-1": ["Jorge Marrero Ibáñez", "Pedro Luis León Hernández", "Guardia extra 1", "Guardia extra 2"],
+    "B7-2": ["Eduardo Barrera Luna", "Juan Luis Ruiz Ruiz", "Guardia extra 1", "Guardia extra 2"],
+    "B7-3": ["Juan Carlos Zamora Parejo", "Antonio Marques Orbe", "Guardia extra 1", "Guardia extra 2"],
+    "B7-4": ["Julián Antonio Noda Correa", "Fausto Guillén Iranzo", "Guardia extra 1", "Guardia extra 2"],
+    "B7-5": ["Lucas Pérez Suárez", "Pablo Iván Gutiérrez Ferreiro", "Guardia extra 1", "Guardia extra 2"],
+  };
+  // Las guardias rotan cada 5 días: el 1-oct-2026 fue Turno 1
+  const turnoDeFecha = f => { const d = Math.round((new Date(f + 'T12:00') - new Date('2026-10-01T12:00')) / 864e5); return ((d % 5) + 5) % 5 + 1; };
+
+  // ---------- Estado ----------
+  const nuevoTurno = (parque = 'B1', num = turnoDeFecha(hoy()), personas = []) => ({ id: uid(), fecha: hoy(), parque, num, personas, gastos: [], pagados: {} });
+  let st;
+  try { st = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
+  const primeraVez = !st || !st.turno;
+  if (primeraVez) st = { turno: nuevoTurno(), historial: [], moneda: 'EUR' };
+  // Cada parque (B1–B7) y turno (1–5) tiene su propia plantilla de gente, con clave "B3-2"
+  if (!st.plantillas) { st.plantillas = {}; if (st.plantilla) st.plantillas['B1-1'] = st.plantilla; delete st.plantilla; }
+  if (!st.turno.parque) st.turno.parque = 'B1';
+  if (!st.turno.num) st.turno.num = 1;
+  const clave = (parque, num) => `${parque}-${num}`;
+  const plantilla = (parque = st.turno.parque, num = st.turno.num) => (st.plantillas[clave(parque, num)] ||= [...(PLANTILLA_INICIAL[clave(parque, num)] || [])]);
+  const etiqueta = t => `${t.parque || 'B1'} · Turno ${t.num || 1}`;
+  const guardar = () => { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch (e) {} };
+
+  let editando = null;      // id del gasto en edición
+  let reparto = new Set();  // personas seleccionadas en el formulario
+  let comidasForm = new Set(['A', 'C']);  // comidas del gasto en el formulario
+
+  // ---------- Dinero (en céntimos) ----------
+  const fmt = c => {
+    const dec = st.moneda === 'CLP' ? 0 : 2;
+    return new Intl.NumberFormat('es', { style: 'currency', currency: st.moneda, minimumFractionDigits: dec, maximumFractionDigits: dec }).format(c / 100);
+  };
+  const parse = s => {
+    s = String(s).trim().replace(/\s/g, '');
+    if (!s) return NaN;
+    // "1.234,56" / "1,234.56" / "12,5" / "12.5"
+    const lc = s.lastIndexOf(','), lp = s.lastIndexOf('.');
+    const dec = Math.max(lc, lp);
+    if (dec > -1 && s.length - dec - 1 <= 2) {
+      s = s.slice(0, dec).replace(/[.,]/g, '') + '.' + s.slice(dec + 1);
+    } else s = s.replace(/[.,]/g, '');
+    const n = Number(s);
+    return isFinite(n) ? Math.round(n * 100) : NaN;
+  };
+
+  // ---------- Cálculo ----------
+  const COMIDAS = { A: 'Almuerzo', C: 'Cena' };
+  const comidasDe = (t, p) => (t.comidas && t.comidas[p]) || ['A', 'C'];
+  const comidasGasto = g => g.comidas && g.comidas.length ? g.comidas : ['A', 'C'];
+  const txtComidas = cs => cs.length === 2 ? 'almuerzo y cena' : COMIDAS[cs[0]].toLowerCase();
+
+  function calcular(t) {
+    const bal = {}; const pagado = {}; const consumo = {};
+    const todos = new Set(t.personas);
+    t.gastos.forEach(g => { todos.add(g.pagador); g.entre.forEach(p => todos.add(p)); });
+    todos.forEach(p => { bal[p] = 0; pagado[p] = 0; consumo[p] = 0; });
+    let total = 0;
+    t.gastos.forEach(g => {
+      total += g.importe;
+      pagado[g.pagador] += g.importe; bal[g.pagador] += g.importe;
+      if (!g.entre.length) return;
+      // Cada persona pesa tantas partes como comidas del gasto a las que va (almuerzo y/o cena)
+      const cg = comidasGasto(g);
+      let pesos = g.entre.map(p => comidasDe(t, p).filter(c => cg.includes(c)).length);
+      if (!pesos.some(Boolean)) pesos = g.entre.map(() => 1);
+      const W = pesos.reduce((a, b) => a + b, 0);
+      const partes = pesos.map(w => Math.floor(g.importe * w / W));
+      let resto = g.importe - partes.reduce((a, b) => a + b, 0);
+      for (let k = 0; resto > 0; k = (k + 1) % partes.length) if (pesos[k]) { partes[k]++; resto--; }
+      g.entre.forEach((p, k) => { consumo[p] += partes[k]; bal[p] -= partes[k]; });
+    });
+    // Liquidación mínima (greedy)
+    const deu = [], acr = [];
+    Object.entries(bal).forEach(([p, b]) => { if (b < 0) deu.push([p, -b]); else if (b > 0) acr.push([p, b]); });
+    deu.sort((a, b) => b[1] - a[1]); acr.sort((a, b) => b[1] - a[1]);
+    const pagos = []; let i = 0, j = 0;
+    while (i < deu.length && j < acr.length) {
+      const m = Math.min(deu[i][1], acr[j][1]);
+      pagos.push({ de: deu[i][0], a: acr[j][0], c: m });
+      deu[i][1] -= m; acr[j][1] -= m;
+      if (!deu[i][1]) i++; if (!acr[j][1]) j++;
+    }
+    return { bal, pagado, consumo, total, pagos, personas: [...todos] };
+  }
+
+  // ---------- Render ----------
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const fechaTxt = f => f ? new Date(f + 'T12:00').toLocaleDateString('es', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }) : '';
+
+  function chip(nombre, on, onClick) {
+    const b = document.createElement('button');
+    b.className = 'chip' + (on ? ' on' : ''); b.textContent = nombre; b.onclick = onClick; return b;
+  }
+
+  function render() {
+    const t = st.turno;
+    $('fecha').value = t.fecha; $('moneda').value = st.moneda;
+
+    // Selector de parque B1–B7
+    const sp = $('selParque'); sp.innerHTML = '';
+    PARQUES.forEach(p => {
+      const b = document.createElement('button');
+      b.className = p === t.parque ? 'on' : ''; b.textContent = p;
+      b.onclick = () => elegir(p, t.num); sp.appendChild(b);
+    });
+
+    $('nombreParque').textContent = PARQUE_NOMBRE[t.parque] || '';
+
+    // Selector de turno 1–5
+    const stn = $('selTurno'); stn.innerHTML = '';
+    [1, 2, 3, 4, 5].forEach(n => {
+      const b = document.createElement('button');
+      b.className = n === t.num ? 'on' : '';
+      b.innerHTML = `${n}<small>${plantilla(t.parque, n).length} pers.</small>`;
+      b.onclick = () => elegir(t.parque, n); stn.appendChild(b);
+    });
+    document.querySelector('header h1').textContent = `Borracha · ${etiqueta(t)}`;
+
+    // Turno: chips
+    const ct = $('chipsTurno'); ct.innerHTML = '';
+    if (!plantilla().length) ct.innerHTML = '<p class="vacio">Añade a tus compañeros/as abajo.</p>';
+    const ausencia = n => (t.cambios || []).find(c => c.quien === n && !t.personas.includes(n));
+    plantilla().forEach(n => ct.appendChild(chip(ausencia(n) ? `${n} · ${ausencia(n).motivo.toLowerCase()}` : n, t.personas.includes(n), () => {
+      t.personas = t.personas.includes(n) ? t.personas.filter(x => x !== n) : [...t.personas, n];
+      guardar(); render();
+    })));
+    // Personas añadidas solo para hoy (borde discontinuo); al tocarlas se quitan
+    t.personas.filter(n => !plantilla().includes(n)).forEach(n => {
+      const c = chip(n + ' ✕', true, () => { t.personas = t.personas.filter(x => x !== n); guardar(); render(); });
+      c.classList.add('extra'); ct.appendChild(c);
+    });
+    $('txtFijo').textContent = `Guardarla fija en la lista de ${etiqueta(t)}`;
+
+    // Plantilla
+    const lp = $('listaPlantilla'); lp.innerHTML = '';
+    plantilla().forEach(n => {
+      const li = document.createElement('li');
+      li.innerHTML = `<div class="info">${esc(n)}</div>`;
+      const b = document.createElement('button'); b.className = 'btn-ghost'; b.textContent = '🗑️';
+      b.onclick = () => { if (confirm(`¿Quitar a ${n} de ${etiqueta(t)}?`)) { st.plantillas[clave(t.parque, t.num)] = plantilla().filter(x => x !== n); t.personas = t.personas.filter(x => x !== n); guardar(); render(); } };
+      li.appendChild(b); lp.appendChild(li);
+    });
+    if (!plantilla().length) lp.innerHTML = '<p class="vacio">Sin nombres todavía.</p>';
+
+    // Gastos: formulario
+    const sel = $('gPagador'); const prev = sel.value; sel.innerHTML = '';
+    const vacia = document.createElement('option'); vacia.value = ''; vacia.textContent = '¿Quién pagó?'; vacia.disabled = true; sel.appendChild(vacia);
+    t.personas.forEach(n => { const o = document.createElement('option'); o.value = o.textContent = n; sel.appendChild(o); });
+    sel.value = '';
+    if (t.personas.includes(prev)) sel.value = prev;
+    else if (!editando && st.yo && t.personas.includes(st.yo.nombre)) sel.value = st.yo.nombre;
+    $('yoTxt').innerHTML = st.yo ? `<b>${esc(st.yo.nombre)}</b><small style="display:block;color:var(--sub)">${esc(st.yo.parque)} · Turno ${st.yo.num}</small>` : '—';
+    reparto = new Set([...reparto].filter(n => t.personas.includes(n)));
+    const cr = $('chipsReparto'); cr.innerHTML = '';
+    if (!t.personas.length) cr.innerHTML = '<p class="vacio">Primero elige quién está de turno.</p>';
+    t.personas.forEach(n => cr.appendChild(chip(n, reparto.has(n), () => { reparto.has(n) ? reparto.delete(n) : reparto.add(n); render(); })));
+    const ccg = $('chipsComidaGasto'); ccg.innerHTML = '';
+    Object.entries(COMIDAS).forEach(([k, nom]) => ccg.appendChild(chip((k === 'A' ? '☀️ ' : '🌙 ') + nom, comidasForm.has(k), () => {
+      if (comidasForm.has(k) && comidasForm.size === 1) return toast('Al menos una comida');
+      comidasForm.has(k) ? comidasForm.delete(k) : comidasForm.add(k); render();
+    })));
+
+    const lcam = $('listaCambios'); lcam.innerHTML = '';
+    if (!(t.cambios || []).length) lcam.innerHTML = '<p class="vacio" style="padding:0">Hoy no hay cambios.</p>';
+    (t.cambios || []).forEach(c => {
+      const li = document.createElement('li');
+      li.innerHTML = `<div class="info"><s>${esc(c.quien)}</s> · ${esc(c.motivo)}<small>${c.sustituto ? '→ Viene <b>' + esc(c.sustituto) + '</b>' : 'Sin sustituto'}</small></div>`;
+      const del = document.createElement('button'); del.className = 'btn-ghost'; del.textContent = '↩️'; del.title = 'Deshacer';
+      del.onclick = () => deshacerCambio(c); li.appendChild(del); lcam.appendChild(li);
+    });
+
+    const lc = $('listaComidas'); lc.innerHTML = '';
+    if (!t.personas.length) lc.innerHTML = '<p class="vacio">Nadie en el turno todavía.</p>';
+    t.personas.forEach(n => {
+      const li = document.createElement('li');
+      li.innerHTML = `<div class="info">${esc(n)}</div>`;
+      const box = document.createElement('div'); box.className = 'comidas';
+      Object.keys(COMIDAS).forEach(k => box.appendChild(chip(k === 'A' ? '☀️' : '🌙', comidasDe(t, n).includes(k), () => {
+        const act = comidasDe(t, n);
+        const nuevo = act.includes(k) ? act.filter(x => x !== k) : [...act, k].sort();
+        if (!nuevo.length) return toast('Si no come, quítalo del turno');
+        t.comidas = { ...(t.comidas || {}), [n]: nuevo }; t.pagados = {}; t.avisados = {}; guardar(); render();
+      })));
+      li.appendChild(box); lc.appendChild(li);
+    });
+
+    const mas = chip('+ Persona', false, () => addPersona(prompt('Nombre de la persona (solo para hoy):'), false));
+    mas.classList.add('mas'); cr.appendChild(mas);
+
+    // Gastos: lista
+    const lg = $('listaGastos'); lg.innerHTML = '';
+    if (!t.gastos.length) lg.innerHTML = '<p class="vacio">Aún no hay gastos.</p>';
+    t.gastos.forEach(g => {
+      const li = document.createElement('li');
+      const entre = g.entre.length === t.personas.length && g.entre.every(p => t.personas.includes(p)) ? 'todos' : g.entre.join(', ');
+      li.innerHTML = `<div class="info">${esc(g.concepto || 'Gasto')}<small>${txtComidas(comidasGasto(g))[0].toUpperCase() + txtComidas(comidasGasto(g)).slice(1)} · pagó <b>${esc(g.pagador)}</b> · entre ${esc(entre)}</small>${g.productos && g.productos.length ? `<details class="prods"><summary>Ver ${g.productos.length} productos</summary>${g.productos.map(x => `<div><span>${esc(x.n)}</span><span>${fmt(x.c)}</span></div>`).join('')}</details>` : ''}</div><span class="monto">${fmt(g.importe)}</span>`;
+      if (g.foto) {
+        const im = document.createElement('img'); im.className = 'miniatura'; im.alt = 'Factura';
+        fotoGet(g.id).then(d => { if (d) im.src = d; }).catch(() => {});
+        im.onclick = () => verFoto(im.src); li.prepend(im);
+      }
+      const ed = document.createElement('button'); ed.className = 'btn-ghost'; ed.textContent = '✏️'; ed.onclick = () => editar(g);
+      const del = document.createElement('button'); del.className = 'btn-ghost'; del.textContent = '🗑️';
+      del.onclick = () => { if (confirm('¿Borrar este gasto?')) { t.gastos = t.gastos.filter(x => x.id !== g.id); fotoDel(g.id).catch(() => {}); t.pagados = {}; t.avisados = {}; guardar(); render(); } };
+      li.append(ed, del); lg.appendChild(li);
+    });
+
+    // Cuentas
+    const r = calcular(t);
+    $('hdrTotal').textContent = fmt(r.total);
+    $('rTotal').textContent = fmt(r.total);
+    $('rPersonas').textContent = t.personas.length;
+    $('rMedia').textContent = t.personas.length ? fmt(Math.round(r.total / t.personas.length)) : fmt(0);
+
+    const lpag = $('listaPagos'); lpag.innerHTML = '';
+    if (!r.pagos.length) lpag.innerHTML = `<p class="vacio">${r.total ? '¡Todo cuadra! Nadie debe nada.' : 'Añade gastos para ver las cuentas.'}</p>`;
+    r.pagos.forEach(p => {
+      const k = `${p.de}>${p.a}`;
+      const e = estadoPago(t, k);
+      const d = document.createElement('div'); d.className = 'pago ' + e;
+      const hora = iso => iso ? new Date(iso).toLocaleString('es', { weekday: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+      const info = t.pagados[k] || {};
+      d.innerHTML = `<div class="pago-fila"><div class="info" style="flex:1"><b>${esc(p.de)}</b> <span class="flecha">→</span> <b>${esc(p.a)}</b></div><span class="monto">${fmt(p.c)}</span></div>
+        <div class="pago-estado">${e === 'pendiente' ? '⏺ Pendiente de pago'
+          : e === 'pagado' ? `⏳ Pagado ${hora(info.pagado)} · esperando que ${esc(p.a.split(' ')[0])} confirme`
+          : `✅ Pagado y confirmado ${hora(info.confirmado)}`}</div>`;
+      const acc = document.createElement('div'); acc.className = 'pago-acc';
+      const yo = st.yo && st.yo.nombre;
+      const boton = (txt, primario, fn) => { const b = document.createElement('button'); b.className = primario ? 'btn' : 'btn-sec'; b.textContent = txt; b.onclick = fn; acc.appendChild(b); };
+      if (e === 'pendiente') boton(yo === p.de ? '💸 Ya he pagado' : 'Marcar pagado', yo === p.de, () => marcarPagado(t, p));
+      if (e === 'pagado') boton(yo === p.a ? '✅ Confirmar recibido' : 'Confirmar recibido', yo === p.a, () => confirmarPago(t, p));
+      if (e !== 'pendiente') { const u = document.createElement('button'); u.className = 'btn-ghost'; u.textContent = '↩️ Deshacer'; u.onclick = () => deshacerPago(t, p); acc.appendChild(u); }
+      d.appendChild(acc); lpag.appendChild(d);
+    });
+
+    // Avisos individuales por WhatsApp
+    const la = $('listaAvisos'); la.innerHTML = '';
+    if (!r.total) la.innerHTML = '<p class="vacio">Añade gastos para poder avisar.</p>';
+    else r.personas.forEach(p => {
+      const b = r.bal[p], li = document.createElement('li');
+      const tel = (st.telefonos || {})[p];
+      li.innerHTML = `<div class="info">${esc(p)}<small>${b < 0 ? 'Paga ' + fmt(-b) : b > 0 ? 'Recibe ' + fmt(b) : 'En paz'}${tel ? ' · 📱 ' + esc(tel) : ''}${t.avisados && t.avisados[p] ? ' · <span class="avisado">✓ avisado</span>' : ''}</small></div>`;
+      const bt = document.createElement('button'); bt.className = 'btn-ghost'; bt.textContent = '📞'; bt.title = 'Guardar teléfono';
+      bt.onclick = () => guardarTelefono(p);
+      const wa = document.createElement('button'); wa.className = 'btn btn-wa'; wa.textContent = 'WhatsApp';
+      wa.onclick = () => avisar(t, p);
+      li.append(bt, wa); la.appendChild(li);
+    });
+
+    const lb = $('listaBalances'); lb.innerHTML = '';
+    r.personas.forEach(p => {
+      const b = r.bal[p];
+      const li = document.createElement('li');
+      li.innerHTML = `<div class="info">${esc(p)}<small>Puso ${fmt(r.pagado[p])} · le toca ${fmt(r.consumo[p])}</small></div>
+        <span class="monto ${b > 0 ? 'pos' : b < 0 ? 'neg' : ''}">${b > 0 ? '+' : ''}${fmt(b)}</span>`;
+      lb.appendChild(li);
+    });
+    if (!r.personas.length) lb.innerHTML = '<p class="vacio">Nadie en el turno todavía.</p>';
+
+    // Historial
+    const lh = $('listaHistorial'); lh.innerHTML = '';
+    if (!st.historial.length) lh.innerHTML = '<p class="vacio">Cuando cierres un turno aparecerá aquí.</p>';
+    st.historial.forEach(h => {
+      const rr = calcular(h);
+      const li = document.createElement('li');
+      li.innerHTML = `<div class="info">${esc(fechaTxt(h.fecha))} · ${esc(etiqueta(h))}<small>${h.personas.length} personas · ${h.gastos.length} gastos</small></div><span class="monto">${fmt(rr.total)}</span>`;
+      const sh = document.createElement('button'); sh.className = 'btn-ghost'; sh.textContent = '📤'; sh.onclick = () => compartir(h);
+      const del = document.createElement('button'); del.className = 'btn-ghost'; del.textContent = '🗑️';
+      del.onclick = () => { if (confirm('¿Borrar este turno del historial?')) { st.historial = st.historial.filter(x => x.id !== h.id); h.gastos.forEach(g => fotoDel(g.id).catch(() => {})); guardar(); render(); } };
+      li.append(sh, del); lh.appendChild(li);
+    });
+  }
+
+  // ---------- Acciones ----------
+  function addPersona(nombre, fijo) {
+    const t = st.turno;
+    const n = String(nombre || '').trim().replace(/\s+/g, ' ');
+    if (!n) return;
+    const igual = x => x.toLowerCase() === n.toLowerCase();
+    const real = plantilla().find(igual) || t.personas.find(igual) || n;
+    if (fijo && !plantilla().includes(real)) plantilla().push(real);
+    if (!t.personas.includes(real)) t.personas.push(real);
+    reparto.add(real);
+    guardar(); render(); toast(`${real} añadido/a`);
+  }
+
+  function elegir(parque, n) {
+    const t = st.turno;
+    if (t.parque === parque && t.num === n) return;
+    t.parque = parque; t.num = n;
+    // Si aún no hay gastos, cargamos la gente de ese parque y turno
+    if (!t.gastos.length) { t.personas = [...plantilla()]; reparto = new Set(t.personas); }
+    guardar(); render();
+  }
+
+  // ---------- Fotos de facturas (IndexedDB: caben muchas más que en localStorage) ----------
+  let fotoForm = null;  // foto (dataURL) del gasto que se está editando
+  const fotosDB = new Promise((res, rej) => {
+    try { const r = indexedDB.open('comida-turno-fotos', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('fotos');
+      r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+    } catch (e) { rej(e); }
+  });
+  fotosDB.catch(() => {});
+  const fotoOp = (modo, fn) => fotosDB.then(d => new Promise((res, rej) => {
+    const tx = d.transaction('fotos', modo); const q = fn(tx.objectStore('fotos'));
+    tx.oncomplete = () => res(q.result); tx.onerror = () => rej(tx.error);
+  }));
+  const fotoGet = id => fotoOp('readonly', s => s.get(id));
+  const fotoSet = (id, d) => fotoOp('readwrite', s => s.put(d, id));
+  const fotoDel = id => fotoOp('readwrite', s => s.delete(id));
+
+  // Reduce la foto a ~1400 px en JPEG para que ocupe poco
+  const comprimir = file => new Promise((res, rej) => {
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => {
+      const k = Math.min(1, 1400 / Math.max(img.width, img.height));
+      const c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url); res(c.toDataURL('image/jpeg', 0.75));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('imagen')); };
+    img.src = url;
+  });
+
+  function ponerFoto(d) {
+    fotoForm = d;
+    $('fotoZona').hidden = !d; $('btnFoto').hidden = !!d;
+    if (d) $('fotoPrev').src = d; else $('fotoPrev').removeAttribute('src');
+  }
+  function verFoto(src) { if (!src) return; $('visorImg').src = src; $('visor').hidden = false; }
+
+  // ---------- Lectura de la factura (OCR en el propio móvil con Tesseract.js) ----------
+  let productosForm = [];  // [{ n: nombre, c: céntimos }]
+  const cargarScript = src => new Promise((res, rej) => {
+    const sc = document.createElement('script'); sc.src = src; sc.onload = res; sc.onerror = rej; document.head.appendChild(sc);
+  });
+
+  // Saca productos y total de las líneas del ticket: "2 PAN BARRA 0,45 0,90" → PAN BARRA 0,90
+  function parsearTicket(texto) {
+    const PRECIO = /(-?\d{1,4}[.,]\d{2})\s*(?:€|EUR|E)?\s*[A-Z*]?\s*$/i;
+    const FUERA = /\b(iva|entregad\w*|cambio|tarjeta|efectivo|base|cuota|visa|mastercard|devoluci\w*|nif|cif|tel[eé]f\w*|fecha|hora|caja|ticket|operaci\w*|autoriz\w*|pagado|redondeo)\b/i;
+    const productos = []; let total = null;
+    texto.split('\n').map(l => l.trim()).filter(Boolean).forEach(l => {
+      const m = l.match(PRECIO); if (!m) return;
+      const c = parse(m[1]); if (!isFinite(c)) return;
+      if (/total/i.test(l)) { if (!/sub/i.test(l)) total = Math.max(total || 0, c); return; }
+      if (FUERA.test(l)) return;
+      const nombre = l.slice(0, m.index)
+        .replace(/(\s*-?\d+[.,]\d{2}\s*(€|EUR)?)+\s*$/i, '')     // precio unitario
+        .replace(/^\d+([.,]\d+)?\s*(x|ud|uds|kg)?\s+/i, '')        // cantidad delante
+        .replace(/[^\p{L}\p{N} .,%\/()+-]/gu, '').replace(/\s+/g, ' ').trim();
+      if (nombre.replace(/[^\p{L}]/gu, '').length < 2) return;
+      productos.push({ n: nombre.charAt(0).toUpperCase() + nombre.slice(1).toLowerCase(), c });
+    });
+    return { productos, total };
+  }
+
+  async function leerFactura(file) {
+    const est = $('ocrEstado'); est.hidden = false;
+    est.textContent = '🔍 Leyendo productos y precios… (la primera vez tarda un poco más)';
+    try {
+      if (!window.Tesseract) await cargarScript('https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js');
+      const { data } = await Tesseract.recognize(file, 'spa', { logger: m => {
+        if (m.status === 'recognizing text') est.textContent = `🔍 Leyendo la factura… ${Math.round(m.progress * 100)}%`;
+      } });
+      const { productos, total } = parsearTicket(data.text);
+      productosForm = productos;
+      const suma = productos.reduce((a, x) => a + x.c, 0);
+      if (!$('gImporte').value && (total || suma)) $('gImporte').value = ((total || suma) / 100).toFixed(2).replace('.', ',');
+      renderProductos();
+      est.textContent = productos.length
+        ? `✅ ${productos.length} productos leídos${total ? ' · total del ticket ' + fmt(total) : ''}. Revisa la lista y elige quién pagó.`
+        : '⚠️ No se han podido leer productos. Pon el importe a mano o añade productos con «+ Producto».';
+      if (!productos.length) { $('productosZona').hidden = false; }
+    } catch (e) {
+      est.textContent = '⚠️ No se pudo leer la factura (¿sin conexión?). Pon el importe a mano.';
+    }
+  }
+
+  function renderProductos() {
+    const ul = $('listaProductos'); ul.innerHTML = '';
+    $('productosZona').hidden = !productosForm.length && $('ocrEstado').hidden;
+    productosForm.forEach((x, i) => {
+      const li = document.createElement('li');
+      const n = document.createElement('input'); n.className = 'p-nombre'; n.value = x.n; n.placeholder = 'Producto';
+      n.oninput = () => { x.n = n.value; };
+      const c = document.createElement('input'); c.className = 'p-precio'; c.inputMode = 'decimal'; c.placeholder = '0,00';
+      c.value = x.c ? (x.c / 100).toFixed(2).replace('.', ',') : '';
+      c.onchange = () => { const v = parse(c.value); x.c = isFinite(v) ? v : 0; renderProductos(); };
+      const del = document.createElement('button'); del.className = 'btn-ghost'; del.textContent = '✕';
+      del.onclick = () => { productosForm.splice(i, 1); renderProductos(); };
+      li.append(n, c, del); ul.appendChild(li);
+    });
+    const suma = productosForm.reduce((a, x) => a + (x.c || 0), 0), imp = parse($('gImporte').value);
+    $('sumaProd').textContent = productosForm.length
+      ? `Suma de productos: ${fmt(suma)}${isFinite(imp) && imp !== suma ? ` · el importe es ${fmt(imp)} (diferencia ${fmt(imp - suma)})` : ' ✓'}`
+      : '';
+  }
+
+  function limpiarForm() {
+    editando = null; $('gConcepto').value = ''; $('gImporte').value = ''; $('gPagador').value = ''; ponerFoto(null);
+    reparto = new Set(st.turno.personas); comidasForm = new Set(['A', 'C']);
+    productosForm = []; renderProductos(); $('ocrEstado').hidden = true;
+    $('tituloForm').textContent = 'Nuevo gasto'; $('btnGuardarGasto').textContent = 'Añadir gasto';
+    $('btnCancelarEdicion').style.display = 'none';
+  }
+
+  function editar(g) {
+    editando = g.id; $('gConcepto').value = g.concepto; $('gImporte').value = (g.importe / 100).toString().replace('.', ',');
+    reparto = new Set(g.entre); comidasForm = new Set(comidasGasto(g)); render(); $('gPagador').value = g.pagador;
+    productosForm = (g.productos || []).map(x => ({ ...x })); renderProductos();
+    ponerFoto(null); if (g.foto) fotoGet(g.id).then(d => { if (editando === g.id) ponerFoto(d || null); }).catch(() => {});
+    $('tituloForm').textContent = 'Editar gasto'; $('btnGuardarGasto').textContent = 'Guardar cambios';
+    $('btnCancelarEdicion').style.display = 'block'; window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function guardarGasto() {
+    const t = st.turno;
+    const importe = parse($('gImporte').value);
+    if (!t.personas.length) return toast('Primero añade gente al turno');
+    if (!(importe > 0)) return toast('Pon un importe válido');
+    if (!$('gPagador').value) return toast('Elige quién pagó la compra');
+    if (!reparto.size) return toast('Elige entre quién se reparte');
+    const g = { id: editando || uid(), concepto: $('gConcepto').value.trim(), importe, pagador: $('gPagador').value, entre: [...reparto], comidas: [...comidasForm].sort(), foto: !!fotoForm,
+      productos: productosForm.filter(x => x.n.trim() || x.c).map(x => ({ n: x.n.trim() || 'Producto', c: x.c || 0 })) };
+    if (fotoForm) fotoSet(g.id, fotoForm).catch(() => toast('No se pudo guardar la foto')); else fotoDel(g.id).catch(() => {});
+    if (editando) t.gastos = t.gastos.map(x => x.id === editando ? g : x); else t.gastos.push(g);
+    t.pagados = {}; t.avisados = {};
+    toast(editando ? 'Gasto actualizado' : 'Gasto añadido');
+    limpiarForm(); guardar(); render();
+  }
+
+  function textoResumen(t) {
+    const r = calcular(t);
+    let s = `🚒 Borracha – comida del turno – ${fechaTxt(t.fecha)} (${etiqueta(t)})\n`;
+    if (st.yo) s += `Enviado por ${st.yo.nombre}\n`;
+    s += `Total: ${fmt(r.total)} · ${t.personas.length} personas\n`;
+    if ((t.cambios || []).length) s += `\n🔄 Cambios:\n` + t.cambios.map(c => `• ${c.quien} (${c.motivo.toLowerCase()})${c.sustituto ? ' → ' + c.sustituto : ''}\n`).join('');
+    s += `\n🧾 Gastos:\n`;
+    t.gastos.forEach(g => s += `• ${g.concepto || 'Gasto'} [${txtComidas(comidasGasto(g))}]: ${fmt(g.importe)} (pagó ${g.pagador})${g.foto ? ' 🧾' : ''}\n${(g.productos || []).map(x => `    – ${x.n}: ${fmt(x.c)}\n`).join('')}`);
+    s += `\n💸 Pagos:\n`;
+    if (!r.pagos.length) s += 'Nadie debe nada 👍\n';
+    r.pagos.forEach(p => { const e = estadoPago(t, p.de + '>' + p.a); s += `• ${p.de} → ${p.a}: ${fmt(p.c)}${e === 'confirmado' ? ' ✅' : e === 'pagado' ? ' ⏳' : ''}\n`; });
+    return s;
+  }
+
+  // ---------- Mensaje individual: qué paga o qué recibe cada uno ----------
+  function textoPersona(t, p) {
+    const r = calcular(t), b = r.bal[p] || 0;
+    let s = `Hola ${saludo(p)} 👋\n🚒 Borracha – comida del turno ${etiqueta(t)} – ${fechaTxt(t.fecha)}\n\n`;
+    s += `Te tocaba ${fmt(r.consumo[p] || 0)} (${txtComidas(comidasDe(t, p))}) y pusiste ${fmt(r.pagado[p] || 0)}.\n\n`;
+    const debe = r.pagos.filter(x => x.de === p), cobra = r.pagos.filter(x => x.a === p);
+    if (debe.length) s += `💸 Tienes que pagar ${fmt(-b)}:\n` + debe.map(x => `• ${fmt(x.c)} a ${x.a}\n`).join('');
+    if (cobra.length) s += `💰 Te tienen que dar ${fmt(b)}:\n` + cobra.map(x => `• ${x.de} te da ${fmt(x.c)}\n`).join('');
+    if (!debe.length && !cobra.length) s += '👍 Estás en paz, no tienes que pagar nada.\n';
+    s += `\nTotal de la comida: ${fmt(r.total)} entre ${t.personas.length} personas.`;
+    if (st.yo) s += `\n— ${st.yo.nombre}`;
+    return s;
+  }
+  // 9 cifras españolas → con prefijo 34
+  const telWa = tel => { let d = String(tel || '').replace(/\D/g, ''); if (d.startsWith('00')) d = d.slice(2); if (d.length === 9) d = '34' + d; return d; };
+  const abrirWa = (p, texto) => window.open(`https://wa.me/${telWa((st.telefonos || {})[p])}?text=${encodeURIComponent(texto)}`, '_blank');
+  const saludo = p => /^Guardia extra/.test(p) ? p : p.split(' ')[0];
+
+  // ---------- Estado de cada pago: pendiente → pagado (lo marca quien paga) → confirmado (lo marca quien cobra) ----------
+  function estadoPago(t, k) {
+    const v = t.pagados && t.pagados[k];
+    if (!v) return 'pendiente';
+    if (v.confirmado) return 'confirmado';
+    return v === true || v.pagado ? 'pagado' : 'pendiente';
+  }
+  function marcarPagado(t, p) {
+    const k = `${p.de}>${p.a}`;
+    t.pagados[k] = { pagado: new Date().toISOString() }; guardar(); render();
+    abrirWa(p.a, `Hola ${saludo(p.a)} 👋\n💸 Te he pagado ${fmt(p.c)} de la comida del turno ${etiqueta(t)} – ${fechaTxt(t.fecha)}.\n\n¿Me confirmas que te ha llegado? Márcalo como recibido en Borracha 🚒\n— ${p.de}`);
+  }
+  function confirmarPago(t, p) {
+    const k = `${p.de}>${p.a}`;
+    t.pagados[k] = { ...(t.pagados[k] === true ? {} : t.pagados[k]), confirmado: new Date().toISOString() }; guardar(); render();
+    abrirWa(p.de, `Hola ${saludo(p.de)} 👋\n✅ Confirmado: he recibido tus ${fmt(p.c)} de la comida del turno ${etiqueta(t)} – ${fechaTxt(t.fecha)}. ¡Gracias!\n— ${p.a}`);
+    toast('Pago confirmado');
+  }
+  function deshacerPago(t, p) {
+    const k = `${p.de}>${p.a}`, v = t.pagados[k];
+    if (v && v.confirmado) t.pagados[k] = { pagado: v.pagado || new Date().toISOString() }; else delete t.pagados[k];
+    guardar(); render();
+  }
+
+  function avisar(t, p) {
+    abrirWa(p, textoPersona(t, p));
+    t.avisados = { ...(t.avisados || {}), [p]: true }; guardar(); render();
+  }
+  function guardarTelefono(p) {
+    const actual = (st.telefonos || {})[p] || '';
+    const v = prompt(`Teléfono de ${p} (se guarda solo en este móvil). Déjalo vacío para borrarlo:`, actual);
+    if (v === null) return;
+    st.telefonos = { ...(st.telefonos || {}) };
+    if (v.trim()) st.telefonos[p] = v.trim(); else delete st.telefonos[p];
+    guardar(); render();
+  }
+
+  async function compartir(t) {
+    const txt = textoResumen(t);
+    if (navigator.share) { try { await navigator.share({ text: txt }); return; } catch (e) { if (e.name === 'AbortError') return; } }
+    copiar(txt, 'Resumen copiado. Pégalo en el grupo.');
+  }
+
+  async function copiar(txt, msg) {
+    try { await navigator.clipboard.writeText(txt); toast(msg); }
+    catch (e) { prompt('Copia este texto:', txt); }
+  }
+
+  function toast(m) { const el = $('toast'); el.textContent = m; el.classList.add('ver'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('ver'), 2200); }
+
+  // ---------- Eventos ----------
+  const addDesdeTurno = () => { addPersona($('nuevoNombre').value, $('fijoPersona').checked); $('nuevoNombre').value = ''; $('fijoPersona').checked = false; };
+  $('btnAddPersona').onclick = addDesdeTurno;
+  $('nuevoNombre').onkeydown = e => { if (e.key === 'Enter') addDesdeTurno(); };
+  $('fecha').onchange = e => {
+    st.turno.fecha = e.target.value; guardar();
+    // Proponemos el turno que estaba de guardia ese día
+    if (e.target.value) elegir(st.turno.parque, turnoDeFecha(e.target.value));
+  };
+  $('moneda').onchange = e => { st.moneda = e.target.value; guardar(); render(); };
+  $('btnGuardarGasto').onclick = guardarGasto;
+  $('btnFoto').onclick = $('btnCambiarFoto').onclick = () => $('inFoto').click();
+  $('btnQuitarFoto').onclick = () => ponerFoto(null);
+  $('fotoPrev').onclick = () => verFoto(fotoForm);
+  $('visor').onclick = () => { $('visor').hidden = true; };
+  $('inFoto').onchange = async e => {
+    const f = e.target.files[0]; e.target.value = '';
+    if (!f) return;
+    try { ponerFoto(await comprimir(f)); }
+    catch (err) { return toast('No se pudo leer la foto'); }
+    leerFactura(f);
+  };
+  $('btnAddProd').onclick = () => { productosForm.push({ n: '', c: 0 }); renderProductos(); $('listaProductos').lastChild.querySelector('input').focus(); };
+  $('btnUsarSuma').onclick = () => { const s = productosForm.reduce((a, x) => a + (x.c || 0), 0); if (s > 0) { $('gImporte').value = (s / 100).toFixed(2).replace('.', ','); renderProductos(); } };
+  $('gImporte').oninput = () => renderProductos();
+  $('btnCancelarEdicion').onclick = () => { limpiarForm(); render(); };
+  $('btnTodos').onclick = () => { reparto = new Set(st.turno.personas); render(); };
+  $('btnNinguno').onclick = () => { reparto.clear(); render(); };
+  $('btnCompartir').onclick = () => compartir(st.turno);
+  $('btnCerrar').onclick = () => {
+    const t = st.turno;
+    if (!t.gastos.length) return toast('No hay gastos en este turno');
+    if (!confirm('¿Cerrar el turno? Se guardará en el historial y empezará uno nuevo con la misma gente.')) return;
+    st.historial.unshift(t); st.turno = nuevoTurno(t.parque); st.turno.personas = [...plantilla()];
+    limpiarForm(); guardar(); render(); toast('Turno guardado en el historial');
+  };
+  $('btnExportar').onclick = () => copiar(JSON.stringify(st), 'Datos copiados');
+  $('btnImportar').onclick = () => {
+    const txt = prompt('Pega aquí los datos copiados desde otro teléfono:');
+    if (!txt) return;
+    try { const d = JSON.parse(txt); if (!d.turno || !!d.plantillas) throw 0; st = d; guardar(); limpiarForm(); render(); toast('Datos importados'); }
+    catch (e) { toast('Esos datos no son válidos'); }
+  };
+  document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
+    document.querySelectorAll('nav button').forEach(x => x.classList.toggle('activa', x === b));
+    document.querySelectorAll('main section').forEach(s => s.classList.toggle('activa', s.id === 's-' + b.dataset.s));
+    window.scrollTo(0, 0);
+  });
+
+  // ---------- Icono y manifest (para "Añadir a pantalla de inicio") ----------
+  function icono(size) {
+    const c = document.createElement('canvas'); c.width = c.height = size; const x = c.getContext('2d');
+    const g = x.createLinearGradient(0, 0, size, size); g.addColorStop(0, '#e53935'); g.addColorStop(1, '#8e0000');
+    x.fillStyle = g; x.fillRect(0, 0, size, size);
+    x.font = `${size * 0.58}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
+    x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('🚒', size / 2, size * 0.54);
+    return c.toDataURL('image/png');
+  }
+  try {
+    const i192 = icono(192), i512 = icono(512);
+    $('appleIcon').href = icono(180); $('favicon').href = i192;
+    const manifest = {
+      name: 'Borracha', short_name: 'Borracha', display: 'standalone',
+      start_url: location.href.split('#')[0], scope: location.href.replace(/[^/]*$/, ''),
+      background_color: '#c62828', theme_color: '#c62828',
+      icons: [{ src: i192, sizes: '192x192', type: 'image/png' }, { src: i512, sizes: '512x512', type: 'image/png', purpose: 'any maskable' }]
+    };
+    $('manifest').href = 'data:application/manifest+json,' + encodeURIComponent(JSON.stringify(manifest));
+  } catch (e) {}
+
+  if (primeraVez) st.turno.personas = [...plantilla()];
+
+  // ---------- Alta: parque, turno y persona del dueño del teléfono ----------
+  const alta = { parque: st.yo?.parque || st.turno.parque, num: st.yo?.num || st.turno.num, nombre: st.yo?.nombre || '' };
+  function renderAlta() {
+    const bot = (cont, items, activo, txt, fn) => { cont.innerHTML = ''; items.forEach(v => {
+      const b = document.createElement('button'); b.className = v === activo ? 'on' : ''; b.innerHTML = txt(v); b.onclick = () => fn(v); cont.appendChild(b); }); };
+    bot($('altaParque'), PARQUES, alta.parque, v => v, v => { alta.parque = v; alta.nombre = ''; renderAlta(); });
+    $('altaParqueNombre').textContent = PARQUE_NOMBRE[alta.parque] || '';
+    bot($('altaTurno'), [1, 2, 3, 4, 5], alta.num, v => String(v), v => { alta.num = v; alta.nombre = ''; renderAlta(); });
+    const gente = plantilla(alta.parque, alta.num).filter(n => !/^Guardia extra/.test(n));
+    const cp = $('altaPersonas'); cp.innerHTML = '';
+    gente.forEach(n => cp.appendChild(chip(n, n === alta.nombre, () => { alta.nombre = n; $('altaOtro').value = ''; renderAlta(); })));
+    $('altaOk').disabled = !(alta.nombre || $('altaOtro').value.trim());
+  }
+  function abrirAlta() { renderAlta(); $('alta').hidden = false; }
+  $('altaOtro').oninput = () => { if ($('altaOtro').value.trim()) alta.nombre = ''; renderAlta(); };
+  $('altaOk').onclick = () => {
+    const nombre = alta.nombre || $('altaOtro').value.trim().replace(/\s+/g, ' ');
+    if (!nombre) return;
+    st.yo = { parque: alta.parque, num: alta.num, nombre, desde: new Date().toISOString() };
+    if (!plantilla(alta.parque, alta.num).includes(nombre)) plantilla(alta.parque, alta.num).push(nombre);
+    // El turno de hoy empieza en su parque
+    if (!st.turno.gastos.length) elegir(alta.parque, st.turno.num);
+    guardar(); $('alta').hidden = true; render(); toast(`¡Hola, ${nombre}!`);
+  };
+  // ---------- Sustituciones (cambio de guardia, vacaciones, licencia…) ----------
+  const MOTIVOS = ['Cambio de guardia', 'Vacaciones', 'Licencia', 'Baja', 'Otro'];
+  let motivoSel = MOTIVOS[0];
+  function abrirCambio() {
+    const t = st.turno;
+    if (!t.personas.length) return toast('No hay nadie en el turno');
+    const sel = $('cQuien'); sel.innerHTML = '';
+    t.personas.forEach(n => { const o = document.createElement('option'); o.value = o.textContent = n; sel.appendChild(o); });
+    // Todo el personal de todos los parques y turnos, para buscar al sustituto
+    const dl = $('todosBomberos'); dl.innerHTML = ''; const vistos = new Set();
+    PARQUES.forEach(pq => [1, 2, 3, 4, 5].forEach(n => plantilla(pq, n).forEach(nom => {
+      if (/^Guardia extra/.test(nom) || vistos.has(nom)) return; vistos.add(nom);
+      const o = document.createElement('option'); o.value = nom; o.label = `${pq} · Turno ${n}`; dl.appendChild(o);
+    })));
+    motivoSel = MOTIVOS[0]; $('cSust').value = ''; renderMotivos(); $('hojaCambio').hidden = false;
+  }
+  function renderMotivos() {
+    const cm = $('cMotivo'); cm.innerHTML = '';
+    MOTIVOS.forEach(m => cm.appendChild(chip(m, m === motivoSel, () => { motivoSel = m; renderMotivos(); })));
+  }
+  function guardarCambio() {
+    const t = st.turno, quien = $('cQuien').value, sust = $('cSust').value.trim().replace(/\s+/g, ' ');
+    if (!quien) return;
+    if (sust && sust !== quien && t.personas.includes(sust)) return toast(`${sust} ya está en el turno`);
+    // El sustituto ocupa su sitio y hereda sus comidas
+    t.personas = t.personas.flatMap(p => p === quien ? (sust ? [sust] : []) : [p]);
+    if (sust && t.comidas && t.comidas[quien]) t.comidas[sust] = t.comidas[quien];
+    reparto.delete(quien); if (sust) reparto.add(sust);
+    t.cambios = [...(t.cambios || []), { id: uid(), quien, motivo: motivoSel, sustituto: sust }];
+    t.pagados = {}; t.avisados = {}; guardar(); $('hojaCambio').hidden = true; render();
+    toast(sust ? `${sust} sustituye a ${quien}` : `${quien}: ${motivoSel.toLowerCase()}`);
+  }
+  function deshacerCambio(c) {
+    const t = st.turno;
+    if (c.sustituto && t.personas.includes(c.sustituto)) t.personas = t.personas.map(p => p === c.sustituto ? c.quien : p);
+    else if (!t.personas.includes(c.quien)) t.personas.push(c.quien);
+    reparto.add(c.quien); if (c.sustituto) reparto.delete(c.sustituto);
+    t.cambios = t.cambios.filter(x => x.id !== c.id); t.pagados = {}; t.avisados = {}; guardar(); render();
+  }
+  $('btnCambio').onclick = abrirCambio;
+  $('cOk').onclick = guardarCambio;
+  $('cCancelar').onclick = () => { $('hojaCambio').hidden = true; };
+
+  $('btnCambiarYo').onclick = abrirAlta;
+  if (!st.yo) abrirAlta();
+
+  limpiarForm(); render();
+})();
+</script>
+</body>
+</html>
