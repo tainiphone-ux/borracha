@@ -86,6 +86,20 @@
   .badge { position: absolute; top: 4px; left: calc(50% + 8px); background: var(--rojo); color: #fff; font-size: 11px; font-weight: 700; min-width: 18px; height: 18px; line-height: 18px; border-radius: 9px; padding: 0 5px; }
   .badge[hidden] { display: none; }
   .tag-app { font-size: 11px; background: var(--bg); border: 1px solid var(--borde); border-radius: 999px; padding: 1px 6px; color: var(--verde); white-space: nowrap; }
+  .menu-fondo { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 25; display: flex; align-items: flex-end; justify-content: center; }
+  .menu-fondo[hidden] { display: none; }
+  .menu-caja { background: var(--card); width: 100%; max-width: 520px; border-radius: 18px 18px 0 0; padding: 18px 16px calc(env(safe-area-inset-bottom) + 16px); }
+  .menu-titulo { font-weight: 700; font-size: 18px; margin: 0 0 2px; }
+  .menu-caja .btn, .menu-caja .btn-sec { width: 100%; margin-top: 8px; padding: 14px; }
+  .quien-fijo { background: var(--bg); border-radius: 10px; padding: 10px 12px; margin-top: 10px; }
+  .buscador { position: relative; }
+  .sugerencias { list-style: none; margin: 4px 0 0; padding: 0; border: 1px solid var(--borde); border-radius: 10px; background: var(--card); max-height: 280px; overflow-y: auto; }
+  .sugerencias[hidden] { display: none; }
+  .sugerencias li { padding: 10px 12px; border-bottom: 1px solid var(--borde); cursor: pointer; }
+  .sugerencias li:last-child { border-bottom: 0; }
+  .sugerencias li:active, .sugerencias li:hover { background: var(--bg); }
+  .sugerencias small { display: block; color: var(--sub); font-size: 12px; }
+  .sugerencias mark { background: transparent; color: var(--rojo); font-weight: 700; }
   .lista { list-style: none; margin: 0; padding: 0; }
   .lista li { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--borde); }
   .lista li:last-child { border-bottom: 0; }
@@ -145,7 +159,7 @@
     <div class="card">
       <h2>¿Quién está de turno?</h2>
       <div class="chips" id="chipsTurno"></div>
-      <p class="ayuda">Toca un nombre para incluirlo o quitarlo del turno.</p>
+      <p class="ayuda">Toca un nombre para cambiarlo por otra persona, quitarlo o incluirlo.</p>
     </div>
 
     <div class="card">
@@ -291,17 +305,30 @@
   <button data-s="cuentas" style="position:relative"><span class="ico">⚖️</span>Cuentas<span class="badge" id="badgeCuentas" hidden></span></button>
   <button data-s="historial"><span class="ico">📚</span>Historial</button>
 </nav>
+<div class="menu-fondo" id="menuPersona" hidden>
+  <div class="menu-caja">
+    <p class="menu-titulo" id="mpNombre"></p>
+    <p class="ayuda" id="mpEstado" style="margin:0 0 10px"></p>
+    <div id="mpAcciones"></div>
+    <button class="btn-sec btn-full" id="mpCancelar">Cancelar</button>
+  </div>
+</div>
 <div class="alta" id="hojaCambio" hidden>
   <div class="alta-caja">
     <h2 style="margin:0 0 4px">🔄 Sustituir a una persona</h2>
     <p class="ayuda">Para cambios de guardia, vacaciones, licencias o bajas.</p>
-    <label for="cQuien">¿Quién no viene?</label>
-    <select id="cQuien"></select>
+    <div id="cQuienFijo" class="quien-fijo" hidden></div>
+    <div id="cQuienSel">
+      <label for="cQuien">¿Quién no viene?</label>
+      <select id="cQuien"></select>
+    </div>
     <label>Motivo</label>
     <div class="chips" id="cMotivo"></div>
     <label for="cSust">¿Quién viene en su lugar?</label>
-    <input id="cSust" list="todosBomberos" placeholder="Busca por nombre" autocomplete="off">
-    <datalist id="todosBomberos"></datalist>
+    <div class="buscador">
+      <input id="cSust" placeholder="Empieza a escribir un nombre…" autocomplete="off" autocapitalize="words">
+      <ul class="sugerencias" id="cSugerencias" hidden></ul>
+    </div>
     <p class="ayuda">Puedes buscar a cualquiera de cualquier parque y turno, o escribir otro nombre. Déjalo vacío si no viene nadie.</p>
     <button class="btn btn-full" id="cOk">Guardar cambio</button>
     <button class="btn-sec btn-full" id="cCancelar">Cancelar</button>
@@ -494,13 +521,10 @@
     const ct = $('chipsTurno'); ct.innerHTML = '';
     if (!plantilla().length) ct.innerHTML = '<p class="vacio">Añade a tus compañeros/as abajo.</p>';
     const ausencia = n => (t.cambios || []).find(c => c.quien === n && !t.personas.includes(n));
-    plantilla().forEach(n => ct.appendChild(chip(ausencia(n) ? `${n} · ${ausencia(n).motivo.toLowerCase()}` : n, t.personas.includes(n), () => {
-      t.personas = t.personas.includes(n) ? t.personas.filter(x => x !== n) : [...t.personas, n];
-      guardar(); render();
-    })));
-    // Personas añadidas solo para hoy (borde discontinuo); al tocarlas se quitan
+    plantilla().forEach(n => ct.appendChild(chip(ausencia(n) ? `${n} · ${ausencia(n).motivo.toLowerCase()}` : n, t.personas.includes(n), () => abrirMenuPersona(n))));
+    // Personas que no son de la lista fija (sustitutos, visitas…): borde discontinuo
     t.personas.filter(n => !plantilla().includes(n)).forEach(n => {
-      const c = chip(n + ' ✕', true, () => { t.personas = t.personas.filter(x => x !== n); guardar(); render(); });
+      const c = chip(n, true, () => abrirMenuPersona(n));
       c.classList.add('extra'); ct.appendChild(c);
     });
     $('txtFijo').textContent = `Guardarla fija en la lista de ${etiqueta(t)}`;
@@ -1009,19 +1033,74 @@
   // ---------- Sustituciones (cambio de guardia, vacaciones, licencia…) ----------
   const MOTIVOS = ['Cambio de guardia', 'Vacaciones', 'Licencia', 'Baja', 'Otro'];
   let motivoSel = MOTIVOS[0];
-  function abrirCambio() {
+  function abrirCambio(quien) {
     const t = st.turno;
     if (!t.personas.length) return toast('No hay nadie en el turno');
     const sel = $('cQuien'); sel.innerHTML = '';
     t.personas.forEach(n => { const o = document.createElement('option'); o.value = o.textContent = n; sel.appendChild(o); });
-    // Todo el personal de todos los parques y turnos, para buscar al sustituto
-    const dl = $('todosBomberos'); dl.innerHTML = ''; const vistos = new Set();
+    // Si viene de tocar un nombre, esa persona queda fijada
+    $('cQuienFijo').hidden = !quien; $('cQuienSel').hidden = !!quien;
+    if (quien) { sel.value = quien; $('cQuienFijo').innerHTML = `Sustituir a <b>${esc(quien)}</b>`; }
+    motivoSel = MOTIVOS[0]; $('cSust').value = ''; $('cSugerencias').hidden = true; renderMotivos();
+    $('hojaCambio').hidden = false; $('hojaCambio').scrollTop = 0;
+    if (quien) setTimeout(() => $('cSust').focus(), 50);
+  }
+
+  // ---------- Buscador de sustitutos: sugerencias por coincidencia ----------
+  const normal = x => x.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  function todoElPersonal() {
+    const lista = [], vistos = new Set();
     PARQUES.forEach(pq => [1, 2, 3, 4, 5].forEach(n => plantilla(pq, n).forEach(nom => {
       if (/^Guardia extra/.test(nom) || vistos.has(nom)) return; vistos.add(nom);
-      const o = document.createElement('option'); o.value = nom; o.label = `${pq} · Turno ${n}`; dl.appendChild(o);
+      lista.push({ nombre: nom, donde: `${pq} · Turno ${n}` });
     })));
-    motivoSel = MOTIVOS[0]; $('cSust').value = ''; renderMotivos(); $('hojaCambio').hidden = false;
+    return lista;
   }
+  function sugerir() {
+    const txt = $('cSust').value.trim(), ul = $('cSugerencias'); ul.innerHTML = '';
+    if (!txt) { ul.hidden = true; return; }
+    const palabras = normal(txt).split(/\s+/);
+    const enTurno = new Set(st.turno.personas);
+    // Todas las palabras escritas deben aparecer en el nombre; primero las que empiezan igual
+    const res = todoElPersonal().filter(p => !enTurno.has(p.nombre) && palabras.every(w => normal(p.nombre).includes(w)))
+      .sort((a, b) => (normal(b.nombre).startsWith(palabras[0]) - normal(a.nombre).startsWith(palabras[0])) || a.nombre.localeCompare(b.nombre))
+      .slice(0, 8);
+    const resaltar = nom => { let h = esc(nom); palabras.forEach(w => { if (!w) return; const i = normal(nom).indexOf(w); if (i > -1) h = h.replace(esc(nom.slice(i, i + w.length)), m => `<mark>${m}</mark>`); }); return h; };
+    res.forEach(p => {
+      const li = document.createElement('li');
+      li.innerHTML = `${resaltar(p.nombre)}<small>${esc(p.donde)}</small>`;
+      li.onclick = () => { $('cSust').value = p.nombre; ul.hidden = true; };
+      ul.appendChild(li);
+    });
+    if (!res.some(p => normal(p.nombre) === normal(txt))) {
+      const li = document.createElement('li');
+      li.innerHTML = `➕ Usar «${esc(txt)}»<small>Nombre nuevo, no está en el listado</small>`;
+      li.onclick = () => { ul.hidden = true; };
+      ul.appendChild(li);
+    }
+    ul.hidden = false;
+  }
+  $('cSust').oninput = sugerir;
+  $('cSust').onfocus = sugerir;
+
+  // ---------- Menú al tocar a una persona del turno ----------
+  function abrirMenuPersona(n) {
+    const t = st.turno, esta = t.personas.includes(n);
+    const cambio = (t.cambios || []).find(c => c.quien === n || c.sustituto === n);
+    $('mpNombre').textContent = n;
+    $('mpEstado').textContent = cambio ? (cambio.quien === n ? `${cambio.motivo}${cambio.sustituto ? ' · le sustituye ' + cambio.sustituto : ''}` : `Sustituye a ${cambio.quien} (${cambio.motivo.toLowerCase()})`)
+      : esta ? 'Está en el turno de hoy' : 'No está en el turno de hoy';
+    const acc = $('mpAcciones'); acc.innerHTML = '';
+    const boton = (txt, cls, fn) => { const b = document.createElement('button'); b.className = cls; b.textContent = txt; b.onclick = () => { cerrarMenuPersona(); fn(); }; acc.appendChild(b); };
+    if (esta) boton('🔄 Cambiar por otra persona', 'btn', () => abrirCambio(n));
+    if (cambio) boton('↩️ Deshacer el cambio', 'btn-sec', () => deshacerCambio(cambio));
+    if (esta) boton('➖ Hoy no viene (quitar)', 'btn-sec', () => { t.personas = t.personas.filter(x => x !== n); reparto.delete(n); t.pagados = {}; t.avisados = {}; guardar(); render(); });
+    else if (!cambio) boton('➕ Incluir en el turno de hoy', 'btn', () => { t.personas = [...t.personas, n]; reparto.add(n); t.pagados = {}; t.avisados = {}; guardar(); render(); });
+    $('menuPersona').hidden = false;
+  }
+  function cerrarMenuPersona() { $('menuPersona').hidden = true; }
+  $('mpCancelar').onclick = cerrarMenuPersona;
+  $('menuPersona').onclick = e => { if (e.target === $('menuPersona')) cerrarMenuPersona(); };
   function renderMotivos() {
     const cm = $('cMotivo'); cm.innerHTML = '';
     MOTIVOS.forEach(m => cm.appendChild(chip(m, m === motivoSel, () => { motivoSel = m; renderMotivos(); })));
@@ -1045,7 +1124,7 @@
     reparto.add(c.quien); if (c.sustituto) reparto.delete(c.sustituto);
     t.cambios = t.cambios.filter(x => x.id !== c.id); t.pagados = {}; t.avisados = {}; guardar(); render();
   }
-  $('btnCambio').onclick = abrirCambio;
+  $('btnCambio').onclick = () => abrirCambio();
   $('cOk').onclick = guardarCambio;
   $('cCancelar').onclick = () => { $('hojaCambio').hidden = true; };
 
