@@ -214,6 +214,8 @@
         <button class="btn-sec grande" id="btnManual">✍️<span>Añadir a mano</span></button>
       </div>
       <input type="file" id="inFoto" accept="image/*" capture="environment" hidden>
+      <button class="btn-ghost btn-full" id="btnArchivo" style="margin-top:6px">📄 Subir ticket digital (PDF) o imagen de la galería</button>
+      <input type="file" id="inArchivo" accept="application/pdf,image/*" hidden>
       <div id="fotoZona" hidden>
         <img id="fotoPrev" class="foto-prev" alt="Factura">
         <div class="fila"><button class="btn-ghost" id="btnCambiarFoto">🔄 Repetir foto</button><button class="btn-ghost" id="btnQuitarFoto">✕ Quitar foto</button></div>
@@ -751,6 +753,7 @@
   function ponerFoto(d) {
     fotoForm = d;
     $('fotoZona').hidden = !d; $('botonesInicio').hidden = !!d || modoManual;
+    $('btnArchivo').hidden = !!d || modoManual;
     if (d) $('fotoPrev').src = d; else $('fotoPrev').removeAttribute('src');
   }
   function verFoto(src) { if (!src) return; $('visorImg').src = src; $('visor').hidden = false; }
@@ -834,8 +837,18 @@
       await worker.setParameters({ tessedit_pageseg_mode: '6', preserve_interword_spaces: '1' });
       const { data } = await worker.recognize(imagen);
       await worker.terminate();
-      ocrTexto = data.text.slice(0, 5000);
-      const { productos, total } = parsearTicket(data.text);
+      aplicarLectura(data.text);
+    } catch (e) {
+      est.textContent = '⚠️ No se pudo leer la factura (¿sin conexión?). Pon el importe a mano.';
+    }
+  }
+
+  // Rellena productos, importe y estado a partir del texto del ticket (de una foto o de un PDF)
+  function aplicarLectura(texto) {
+    const est = $('ocrEstado'); est.hidden = false;
+    {
+      ocrTexto = texto.slice(0, 5000);
+      const { productos, total } = parsearTicket(texto);
       productosForm = productos;
       const suma = productos.reduce((a, x) => a + x.c, 0);
       if (!$('gImporte').value && (total || suma)) $('gImporte').value = ((total || suma) / 100).toFixed(2).replace('.', ',');
@@ -845,8 +858,42 @@
         : '⚠️ No se han podido leer productos. Pon el importe a mano o añade productos con «+ Producto».')
         + `<details style="margin-top:6px"><summary>Ver el texto leído</summary><pre style="white-space:pre-wrap;font-size:12px;margin:6px 0 0">${esc(ocrTexto)}</pre></details>`;
       if (!productos.length) { $('productosZona').hidden = false; }
+    }
+  }
+
+  // Ticket digital en PDF (p. ej. el de Mercadona): se lee el texto exacto, sin foto
+  async function leerPdf(file) {
+    const est = $('ocrEstado'); est.hidden = false; est.textContent = '📄 Leyendo el ticket digital…';
+    try {
+      if (!window.pdfjsLib) {
+        await cargarScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js');
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      }
+      const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+      const lineas = [];
+      for (let n = 1; n <= Math.min(pdf.numPages, 3); n++) {
+        const pag = await pdf.getPage(n), tc = await pag.getTextContent();
+        // Agrupa los trozos de texto por altura (misma línea) y los ordena de izquierda a derecha
+        const filas = [];
+        tc.items.filter(it => it.str.trim()).forEach(it => {
+          const y = it.transform[5], x = it.transform[4];
+          let f = filas.find(f => Math.abs(f.y - y) < 3);
+          if (!f) filas.push(f = { y, partes: [] });
+          f.partes.push({ x, t: it.str });
+        });
+        filas.sort((a, b) => b.y - a.y).forEach(f => lineas.push(f.partes.sort((a, b) => a.x - b.x).map(p => p.t.trim()).join('   ')));
+        // La primera página sirve también como «foto» del ticket
+        if (n === 1) {
+          const vp = pag.getViewport({ scale: 2 }), c = document.createElement('canvas');
+          c.width = vp.width; c.height = vp.height;
+          await pag.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
+          const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.85));
+          ponerFoto(await comprimir(new File([blob], 'ticket.jpg', { type: 'image/jpeg' })));
+        }
+      }
+      aplicarLectura(lineas.join('\n'));
     } catch (e) {
-      est.textContent = '⚠️ No se pudo leer la factura (¿sin conexión?). Pon el importe a mano.';
+      est.textContent = '⚠️ No se pudo leer el PDF. Pon el importe a mano.';
     }
   }
 
@@ -875,10 +922,10 @@
 
   let modoManual = false;  // el usuario eligió apuntar la compra a mano
   function limpiarForm() {
-    modoManual = false; $('botonesInicio').hidden = false;
+    modoManual = false; $('botonesInicio').hidden = false; $('btnArchivo').hidden = false;
     editando = null; $('gConcepto').value = ''; $('gImporte').value = ''; $('gPagador').value = ''; ponerFoto(null);
     reparto = new Set(st.turno.personas); comidasForm = new Set(['A', 'C']);
-    productosForm = []; ocrTexto = ''; renderProductos(); $('ocrEstado').hidden = true;
+    productosForm = []; ocrTexto = ''; $('ocrEstado').hidden = true; renderProductos();
     $('tituloForm').textContent = 'Nuevo gasto'; $('btnGuardarGasto').textContent = 'Añadir gasto';
     $('btnCancelarEdicion').style.display = 'none';
   }
@@ -1012,6 +1059,14 @@
   $('btnQuitarFoto').onclick = () => ponerFoto(null);
   $('fotoPrev').onclick = () => verFoto(fotoForm);
   $('visor').onclick = () => { $('visor').hidden = true; };
+  $('btnArchivo').onclick = () => $('inArchivo').click();
+  $('inArchivo').onchange = async e => {
+    const f = e.target.files[0]; e.target.value = '';
+    if (!f) return;
+    if (f.type === 'application/pdf' || /\.pdf$/i.test(f.name)) return leerPdf(f);
+    try { ponerFoto(await comprimir(f)); } catch (err) { return toast('No se pudo abrir la imagen'); }
+    leerFactura(f);
+  };
   $('inFoto').onchange = async e => {
     const f = e.target.files[0]; e.target.value = '';
     if (!f) return;
@@ -1020,7 +1075,7 @@
     leerFactura(f);
   };
   $('btnManual').onclick = () => {
-    modoManual = true; $('botonesInicio').hidden = true;
+    modoManual = true; $('botonesInicio').hidden = true; $('btnArchivo').hidden = true;
     if (!productosForm.length) productosForm.push({ n: '', c: 0 });
     renderProductos(); $('gConcepto').focus();
   };
