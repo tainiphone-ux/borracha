@@ -1326,6 +1326,14 @@
     db.collection('turnos').doc(idTurno(t)).set(datos, { mergeFields: campos }).catch(e => estadoNube('⚠️', 'No se pudo guardar en la nube: ' + e.code));
   }
 
+  // ¿Este móvil tiene algo distinto de la lista por defecto? (gastos, sustitutos, quién trae comida, quién no viene…)
+  // Si es así y el turno aún no está en la nube, lo sube; un móvil recién instalado no pisa nada.
+  function turnoCambiado() {
+    const t = st.turno, orden = a => JSON.stringify([...a].sort());
+    return t.gastos.length > 0 || (t.cambios || []).length > 0 || (t.traen || []).length > 0
+      || Object.keys(t.comidas || {}).length > 0 || orden(t.personas) !== orden(plantilla());
+  }
+
   function escucharTurno() {
     if (!db) return;
     if (desuscribir) desuscribir();
@@ -1333,7 +1341,7 @@
     let primera = true;
     desuscribir = db.collection('turnos').doc(id).onSnapshot(snap => {
       if (id !== docActual || snap.metadata.hasPendingWrites) return;
-      if (!snap.exists) { if (primera && st.turno.gastos.length) subirTurno(); primera = false; return; }
+      if (!snap.exists) { if (primera && turnoCambiado()) subirTurno(); primera = false; return; }
       aplicarRemoto(snap.data(), primera); primera = false;
     }, e => estadoNube('⚠️', 'Error de conexión: ' + e.code));
   }
