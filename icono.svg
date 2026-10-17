@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 140 140">
+  <!-- Fondo cuadrado: iOS y Android redondean las esquinas por su cuenta -->
+  <rect width="140" height="140" fill="#C62828"/>
+  <!-- Contenido reducido al 84 % y centrado, para que quepa en la zona segura de Android -->
+  <g transform="translate(70 71) scale(0.84) translate(-70 -71)">
+    <path d="M70 28 C82 44 92 54 90 72 C89 86 80 94 70 94 C60 94 51 86 50 72 C49 62 56 55 58 46 C62 54 64 57 67 58 C67 48 65 38 70 28Z" fill="#FFB300"/>
+    <path d="M70 56 C76 64 80 70 79 78 C78 85 74 89 70 89 C66 89 62 85 61 78 C61 72 66 66 70 56Z" fill="#FFF3C4"/>
+    <rect x="28" y="40" width="3.5" height="22" rx="1.7" fill="#fff"/>
+    <rect x="34.5" y="40" width="3.5" height="22" rx="1.7" fill="#fff"/>
+    <rect x="41" y="40" width="3.5" height="22" rx="1.7" fill="#fff"/>
+    <rect x="28" y="58" width="16.5" height="9" rx="4.5" fill="#fff"/>
+    <rect x="32.5" y="64" width="7.5" height="50" rx="3.7" fill="#fff"/>
+    <path d="M106 40 C114 46 116 60 112 74 L108 74 L108 112 A3.7 3.7 0 0 1 100.6 112 L100.6 44 C100.6 41 103 39 106 40Z" fill="#fff"/>
+  </g>
+</svg>

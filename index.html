@@ -9,8 +9,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Borracha">
-<link id="appleIcon" rel="apple-touch-icon" href="">
-<link id="favicon" rel="icon" href="">
+<link rel="apple-touch-icon" href="icono-180.png">
+<link rel="icon" type="image/png" sizes="32x32" href="icono-32.png">
+<link rel="icon" type="image/svg+xml" href="icono.svg">
 <link id="manifest" rel="manifest" href="">
 <style>
   :root {
@@ -108,6 +109,8 @@
   .add-persona > label:first-child { font-weight: 600; color: var(--txt); font-size: 15px; }
   .resumen-borracha { margin: -4px 0 10px; font-size: 14px; color: var(--sub); }
   .chip.trae { border-style: dashed; color: var(--sub); }
+  .logo { width: 32px; height: 32px; border-radius: 8px; box-shadow: 0 0 0 1.5px rgba(255,255,255,.35); flex: 0 0 auto; }
+  .logo-grande { width: 84px; height: 84px; border-radius: 20px; }
   .lista { list-style: none; margin: 0; padding: 0; }
   .lista li { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--borde); }
   .lista li:last-child { border-bottom: 0; }
@@ -146,7 +149,7 @@
 </head>
 <body>
 <header>
-  <span style="font-size:26px">🚒</span>
+  <img src="icono-180.png" alt="" class="logo">
   <h1>Borracha</h1>
   <span class="nube" id="nube" title="Conexión">⚪</span>
   <span class="total" id="hdrTotal">0</span>
@@ -340,7 +343,7 @@
 </div>
 <div class="alta" id="alta" hidden>
   <div class="alta-caja">
-    <div style="font-size:44px;text-align:center">🚒</div>
+    <div style="text-align:center"><img src="icono-180.png" alt="Borracha" class="logo-grande"></div>
     <h2 style="text-align:center;margin:4px 0">¿Quién eres?</h2>
     <p class="ayuda" style="text-align:center">Elige tu parque, tu turno y tu nombre. Así sabremos quién tiene la app en cada teléfono.</p>
     <label>Parque</label>
@@ -1110,22 +1113,17 @@
   });
 
   // ---------- Icono y manifest (para "Añadir a pantalla de inicio") ----------
-  function icono(size) {
-    const c = document.createElement('canvas'); c.width = c.height = size; const x = c.getContext('2d');
-    const g = x.createLinearGradient(0, 0, size, size); g.addColorStop(0, '#e53935'); g.addColorStop(1, '#8e0000');
-    x.fillStyle = g; x.fillRect(0, 0, size, size);
-    x.font = `${size * 0.58}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
-    x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('🚒', size / 2, size * 0.54);
-    return c.toDataURL('image/png');
-  }
+  // Icono: cubiertos y llama (icono.svg, con sus PNG en 32, 180, 192 y 512 px)
   try {
-    const i192 = icono(192), i512 = icono(512);
-    $('appleIcon').href = icono(180); $('favicon').href = i192;
+    const base = location.href.split(/[?#]/)[0].replace(/[^/]*$/, '');
     const manifest = {
       name: 'Borracha', short_name: 'Borracha', display: 'standalone',
-      start_url: location.href.split('#')[0], scope: location.href.replace(/[^/]*$/, ''),
+      start_url: base, scope: base,
       background_color: '#c62828', theme_color: '#c62828',
-      icons: [{ src: i192, sizes: '192x192', type: 'image/png' }, { src: i512, sizes: '512x512', type: 'image/png', purpose: 'any maskable' }]
+      icons: [
+        { src: base + 'icono-192.png', sizes: '192x192', type: 'image/png' },
+        { src: base + 'icono-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
+      ]
     };
     $('manifest').href = 'data:application/manifest+json,' + encodeURIComponent(JSON.stringify(manifest));
   } catch (e) {}
