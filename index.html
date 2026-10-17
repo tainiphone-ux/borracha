@@ -301,6 +301,8 @@
       <h2>Este teléfono</h2>
       <div class="fila"><div id="yoTxt"></div><button class="btn-sec fijo" id="btnCambiarYo">Cambiar</button></div>
       <p class="ayuda" id="nubeTxt"></p>
+      <button class="btn-sec btn-full" id="btnNotis">🔔 Activar notificaciones</button>
+      <p class="ayuda" id="notisTxt"></p>
     </div>
     <div class="card">
       <h2>Quién tiene la app</h2>
@@ -1278,6 +1280,47 @@
   $('btnCambiarYo').onclick = abrirAlta;
   if (!st.yo) abrirAlta();
 
+  // ---------- Notificaciones ----------
+  // Con la app abierta: aviso dentro de la app. Con la app en segundo plano: notificación del sistema (si se ha permitido).
+  const puedeNotificar = () => 'Notification' in window && Notification.permission === 'granted';
+  function notificar(titulo, cuerpo, tag) {
+    toast(titulo);
+    if (navigator.vibrate) try { navigator.vibrate([120, 60, 120]); } catch (e) {}
+    if (!puedeNotificar() || document.visibilityState === 'visible') return;
+    const opciones = { body: cuerpo, tag, icon: 'icono-192.png', badge: 'icono-192.png', vibrate: [120, 60, 120], data: { url: location.href.split('#')[0] } };
+    if ('serviceWorker' in navigator) navigator.serviceWorker.ready.then(r => r.showNotification(titulo, opciones)).catch(() => { try { new Notification(titulo, opciones); } catch (e) {} });
+    else try { new Notification(titulo, opciones); } catch (e) {}
+  }
+  function estadoNotis() {
+    const b = $('btnNotis'), txt = $('notisTxt');
+    if (!('Notification' in window)) { b.hidden = true; txt.textContent = 'Este navegador no permite notificaciones. En iPhone, instala la app en la pantalla de inicio (iOS 16.4 o superior).'; return; }
+    b.hidden = Notification.permission !== 'default';
+    txt.textContent = Notification.permission === 'granted' ? '🔔 Notificaciones activadas en este móvil.'
+      : Notification.permission === 'denied' ? '🔕 Las notificaciones están bloqueadas. Actívalas en los ajustes del móvil para Borracha.'
+      : 'Te avisaremos cuando te paguen, cuando confirmen tu pago y cuando haya gastos nuevos.';
+  }
+  $('btnNotis').onclick = async () => {
+    try { await Notification.requestPermission(); } catch (e) {}
+    estadoNotis();
+    if (puedeNotificar() && 'serviceWorker' in navigator) navigator.serviceWorker.ready.then(r => r.showNotification('🔔 Notificaciones activadas', { body: 'Así te avisará Borracha', icon: 'icono-192.png', tag: 'prueba' })).catch(() => {});
+  };
+  estadoNotis();
+
+  // Recordatorio al abrir la app: pagos que me tocan hacer o confirmar (una vez por guardia)
+  function recordarPendientes() {
+    const t = st.turno, yo = st.yo && st.yo.nombre; if (!yo || !t.gastos.length) return;
+    const pagos = calcular(t).pagos;
+    const debo = pagos.filter(p => p.de === yo && estadoPago(t, p.de + '>' + p.a) === 'pendiente');
+    const confirmar = pagos.filter(p => p.a === yo && estadoPago(t, p.de + '>' + p.a) === 'pagado');
+    const clave = 'recordado-' + idTurnoLocal(t);
+    let ya = null; try { ya = sessionStorage.getItem(clave); } catch (e) {}
+    if (ya || (!debo.length && !confirmar.length)) return;
+    try { sessionStorage.setItem(clave, '1'); } catch (e) {}
+    if (debo.length) notificar(`⏰ Tienes que pagar ${fmt(debo.reduce((a, p) => a + p.c, 0))}`, debo.map(p => `${fmt(p.c)} a ${p.a}`).join(' · '), 'recordatorio-pagar');
+    if (confirmar.length) notificar(`⏰ Tienes ${confirmar.length} ${confirmar.length === 1 ? 'pago' : 'pagos'} por confirmar`, confirmar.map(p => `${p.de}: ${fmt(p.c)}`).join(' · '), 'recordatorio-confirmar');
+  }
+  const idTurnoLocal = t => `${t.parque}_${t.fecha}_T${t.num}`;
+
   // ---------- Conexión entre apps (Firebase: Firestore + acceso anónimo) ----------
   // Cada turno se comparte en turnos/{parque}_{fecha}_T{turno}; las fotos en fotos/{gasto}; quién tiene la app en usuarios/{id}.
   const FB_CONFIG = {
@@ -1358,10 +1401,10 @@
       const imp = calcular({ ...t, gastos: remotos, personas: r.personas || t.personas, comidas: r.comidas || {} }).pagos;
       imp.forEach(p => {
         const k = `${p.de}>${p.a}`, a0 = antes[k] || {}, a1 = ahora[k] || {};
-        if (p.a === yo && a1.pagado && !a0.pagado) toast(`💸 ${saludo(p.de)} dice que te ha pagado ${fmt(p.c)}. Confírmalo en Cuentas`);
-        if (p.de === yo && a1.confirmado && !a0.confirmado) toast(`✅ ${saludo(p.a)} ha confirmado tu pago de ${fmt(p.c)}`);
+        if (p.a === yo && a1.pagado && !a0.pagado) notificar(`💸 ${saludo(p.de)} te ha pagado ${fmt(p.c)}`, 'Toca para confirmar que lo has recibido', 'pago-' + k);
+        if (p.de === yo && a1.confirmado && !a0.confirmado) notificar(`✅ ${saludo(p.a)} ha confirmado tu pago`, `${fmt(p.c)} · comida del turno ${etiqueta(t)}`, 'conf-' + k);
       });
-      remotos.filter(g => !t.gastos.some(x => x.id === g.id) && g.por !== yo).forEach(g => toast(`🧾 ${saludo(g.pagador)} ha añadido ${g.concepto || 'un gasto'}: ${fmt(g.importe)}`));
+      remotos.filter(g => !t.gastos.some(x => x.id === g.id) && g.por !== yo).forEach(g => notificar(`🧾 Nuevo gasto: ${g.concepto || 'compra'} · ${fmt(g.importe)}`, `Lo pagó ${g.pagador}${g.productos && g.productos.length ? ` · ${g.productos.length} productos` : ''}`, 'gasto-' + g.id));
     }
     if (r.personas) t.personas = r.personas;
     t.comidas = r.comidas || {}; t.cambios = r.cambios || []; t.pagados = r.pagados || {}; t.traen = r.traen || [];
@@ -1369,6 +1412,7 @@
     reparto = new Set([...reparto].filter(n => t.personas.includes(n)));
     guardarLocal(); render();
     if (soloAqui.length) subirTurno();
+    if (primera) setTimeout(recordarPendientes, 800);
   }
 
   function borrarGastoNube(id) {
@@ -1392,7 +1436,13 @@
   }
   function escucharUsuarios() {
     db.collection('usuarios').onSnapshot(q => {
-      usuarios = {}; q.forEach(d => { usuarios[d.id] = d.data(); }); render();
+      const antes = usuarios, primeraCarga = !Object.keys(antes).length;
+      usuarios = {}; q.forEach(d => { usuarios[d.id] = d.data(); });
+      // Aviso cuando alguien de mi parque y turno instala la app
+      if (!primeraCarga && st.yo) Object.entries(usuarios)
+        .filter(([id, u]) => !antes[id] && id !== miUid && u.parque === st.yo.parque && u.num === st.yo.num)
+        .forEach(([id, u]) => notificar(`👋 ${u.nombre} se ha unido a la borracha`, `${u.parque} · Turno ${u.num}`, 'usuario-' + id));
+      render();
     }, () => {});
   }
 
@@ -1400,6 +1450,7 @@
   if (typeof avisoFecha === 'string') toast(avisoFecha);
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState !== 'visible') return;
+    estadoNotis();
     const r = actualizarFecha();
     if (r) { limpiarForm(); render(); sincronizar(); if (typeof r === 'string') toast(r); }
   });
