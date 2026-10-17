@@ -1,16 +1,6 @@
 // Service worker de Borracha: permite instalar la app y abrirla sin cobertura.
 // Siempre intenta la red primero (para tener la última versión) y, si no hay, usa la copia guardada.
-const CACHE = 'borracha-v3';
-// Avisos con la app cerrada: Firebase Cloud Messaging muestra la notificación que manda el servidor
-try {
-  importScripts('https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js', 'https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js');
-  firebase.initializeApp({
-    apiKey: 'AIzaSyAn6-jJShRJX6pZhZzGsK5r2HHXRnJ_8eM', authDomain: 'borracha-93698.firebaseapp.com', projectId: 'borracha-93698',
-    storageBucket: 'borracha-93698.firebasestorage.app', messagingSenderId: '574903666414', appId: '1:574903666414:web:aab8c3b3305346c08495ff'
-  });
-  firebase.messaging();
-} catch (e) { /* sin conexión al instalar: la app funciona igual, solo sin avisos con la app cerrada */ }
-
+const CACHE = 'borracha-v4';
 const BASICOS = ['./', 'index.html', 'manifest.webmanifest', 'icono-192.png', 'icono-512.png', 'icono-180.png', 'icono-32.png'];
 
 self.addEventListener('install', e => {
@@ -40,5 +30,22 @@ self.addEventListener('notificationclick', e => {
   e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(lista => {
     const abierta = lista.find(c => c.url.startsWith(self.registration.scope));
     return abierta ? abierta.focus() : self.clients.openWindow(self.registration.scope);
+  }));
+});
+
+// Avisos con la app cerrada: el servidor los manda por Firebase Cloud Messaging y aquí se muestran.
+// (iPhone exige mostrar siempre una notificación por cada aviso recibido.)
+self.addEventListener('push', e => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch (err) { d = { notification: { title: 'Borracha', body: e.data ? e.data.text() : '' } }; }
+  const n = d.notification || (d.data && d.data.title ? d.data : {}) || {};
+  const titulo = n.title || 'Borracha';
+  e.waitUntil(self.registration.showNotification(titulo, {
+    body: n.body || '',
+    icon: n.icon || 'icono-192.png',
+    badge: 'icono-192.png',
+    tag: n.tag || undefined,
+    renotify: !!n.tag,
+    data: { url: (d.fcmOptions && d.fcmOptions.link) || self.registration.scope }
   }));
 });
