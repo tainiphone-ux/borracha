@@ -162,6 +162,10 @@
 <main>
   <!-- TURNO -->
   <section id="s-turno" class="activa">
+    <div class="card banner-instalar" id="bannerNotis" hidden>
+      <div><b>🔔 Activa los avisos</b><small>Para enterarte cuando te paguen, confirmen tu pago o haya gastos nuevos, aunque tengas la app cerrada</small></div>
+      <button class="btn fijo" id="btnNotis2">Activar</button>
+    </div>
     <div class="card banner-instalar" id="bannerInstalar" hidden>
       <div><b>📲 Instala Borracha</b><small>Tenla como app en tu pantalla de inicio</small></div>
       <button class="btn fijo" id="btnInstalar">Instalar</button>
@@ -1169,7 +1173,7 @@
     if (!plantilla(alta.parque, alta.num).includes(nombre)) plantilla(alta.parque, alta.num).push(nombre);
     // El turno de hoy empieza en su parque
     if (!st.turno.gastos.length) elegir(alta.parque, alta.num);
-    guardar(); $('alta').hidden = true; render(); toast(`¡Hola, ${nombre}!`); registrarUsuario();
+    guardar(); $('alta').hidden = true; render(); toast(`¡Hola, ${nombre}!`); registrarUsuario(); estadoNotis();
   };
   // ---------- Sustituciones: alguien no viene y otra persona ocupa su sitio ----------
   function abrirCambio(quien) {
@@ -1295,10 +1299,12 @@
     const b = $('btnNotis'), txt = $('notisTxt');
     if (!('Notification' in window)) { b.hidden = true; txt.textContent = 'Este navegador no permite notificaciones. En iPhone, instala la app en la pantalla de inicio (iOS 16.4 o superior).'; return; }
     b.hidden = Notification.permission !== 'default';
+    $('bannerNotis').hidden = Notification.permission !== 'default' || !st.yo;
     txt.textContent = Notification.permission === 'granted' ? '🔔 Notificaciones activadas en este móvil.'
       : Notification.permission === 'denied' ? '🔕 Las notificaciones están bloqueadas. Actívalas en los ajustes del móvil para Borracha.'
       : 'Te avisaremos cuando te paguen, cuando confirmen tu pago y cuando haya gastos nuevos.';
   }
+  $('btnNotis2').onclick = () => $('btnNotis').click();
   $('btnNotis').onclick = async () => {
     try { await Notification.requestPermission(); } catch (e) {}
     estadoNotis(); activarPush();
