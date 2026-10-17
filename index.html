@@ -1017,13 +1017,13 @@
   }
   function marcarPagado(t, p) {
     const k = `${p.de}>${p.a}`;
-    t.pagados[k] = { pagado: new Date().toISOString() }; guardar(); render();
+    t.pagados[k] = { pagado: new Date().toISOString(), c: p.c }; guardar(); render();
     if (tieneApp(p.a)) return toast(`${saludo(p.a)} lo verá en su app para confirmarlo`);
     abrirWa(p.a, `Hola ${saludo(p.a)} 👋\n💸 Te he pagado ${fmt(p.c)} de la comida del turno ${etiqueta(t)} – ${fechaTxt(t.fecha)}.\n\n¿Me confirmas que te ha llegado? Márcalo como recibido en Borracha 🚒\n— ${p.de}`);
   }
   function confirmarPago(t, p) {
     const k = `${p.de}>${p.a}`;
-    t.pagados[k] = { ...(t.pagados[k] === true ? {} : t.pagados[k]), confirmado: new Date().toISOString() }; guardar(); render();
+    t.pagados[k] = { ...(t.pagados[k] === true ? {} : t.pagados[k]), confirmado: new Date().toISOString(), c: p.c }; guardar(); render();
     if (tieneApp(p.de)) return toast(`Confirmado. ${saludo(p.de)} lo verá en su app`);
     abrirWa(p.de, `Hola ${saludo(p.de)} 👋\n✅ Confirmado: he recibido tus ${fmt(p.c)} de la comida del turno ${etiqueta(t)} – ${fechaTxt(t.fecha)}. ¡Gracias!\n— ${p.a}`);
     toast('Pago confirmado');
@@ -1301,7 +1301,7 @@
   }
   $('btnNotis').onclick = async () => {
     try { await Notification.requestPermission(); } catch (e) {}
-    estadoNotis();
+    estadoNotis(); activarPush();
     if (puedeNotificar() && 'serviceWorker' in navigator) navigator.serviceWorker.ready.then(r => r.showNotification('🔔 Notificaciones activadas', { body: 'Así te avisará Borracha', icon: 'icono-192.png', tag: 'prueba' })).catch(() => {});
   };
   estadoNotis();
@@ -1346,7 +1346,7 @@
       miUid = (await firebase.auth().signInAnonymously()).user.uid;
       db = fs;
       estadoNube('🟢', 'Conectado: los del mismo parque y turno veis lo mismo');
-      registrarUsuario(); escucharUsuarios(); escucharTurno();
+      registrarUsuario(); escucharUsuarios(); escucharTurno(); activarPush();
     } catch (e) {
       estadoNube('⚪', 'Sin conexión: los datos se guardan solo en este móvil' + (e && (e.code || e.message) ? ` (${e.code || e.message})` : ''));
     }
@@ -1427,6 +1427,20 @@
     let d = null; try { d = await fotoGet(id); } catch (e) {}
     if (!d && db) { try { const s = await db.collection('fotos').doc(id).get(); d = s.exists ? s.data().d : null; if (d) fotoSet(id, d).catch(() => {}); } catch (e) {} }
     return d;
+  }
+
+  // ---------- Avisos con la app cerrada (Firebase Cloud Messaging) ----------
+  // Cada móvil guarda su «dirección» de avisos en usuarios/{id}.fcm; la función del servidor la usa para avisarle.
+  const VAPID = 'BHmaaN6yBYYNIZHV_jZBqMqYqiW9rneRGTd4iHgDIE6OeybZxOaSw3YAoNykoWZJS6QM8DVsBoz7mdAbiPSk_XI';
+  async function activarPush() {
+    if (!db || !st.yo || !puedeNotificar() || !('serviceWorker' in navigator)) return;
+    try {
+      if (!firebase.messaging) await cargarScript('https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js');
+      if (!(await firebase.messaging.isSupported())) return;
+      const reg = await navigator.serviceWorker.ready;
+      const token = await firebase.messaging().getToken({ vapidKey: VAPID, serviceWorkerRegistration: reg });
+      if (token) db.collection('usuarios').doc(miUid).set({ fcm: token }, { merge: true }).catch(() => {});
+    } catch (e) {}
   }
 
   function registrarUsuario() {

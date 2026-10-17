@@ -1,6 +1,16 @@
 // Service worker de Borracha: permite instalar la app y abrirla sin cobertura.
 // Siempre intenta la red primero (para tener la última versión) y, si no hay, usa la copia guardada.
-const CACHE = 'borracha-v2';
+const CACHE = 'borracha-v3';
+// Avisos con la app cerrada: Firebase Cloud Messaging muestra la notificación que manda el servidor
+try {
+  importScripts('https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js', 'https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js');
+  firebase.initializeApp({
+    apiKey: 'AIzaSyAn6-jJShRJX6pZhZzGsK5r2HHXRnJ_8eM', authDomain: 'borracha-93698.firebaseapp.com', projectId: 'borracha-93698',
+    storageBucket: 'borracha-93698.firebasestorage.app', messagingSenderId: '574903666414', appId: '1:574903666414:web:aab8c3b3305346c08495ff'
+  });
+  firebase.messaging();
+} catch (e) { /* sin conexión al instalar: la app funciona igual, solo sin avisos con la app cerrada */ }
+
 const BASICOS = ['./', 'index.html', 'manifest.webmanifest', 'icono-192.png', 'icono-512.png', 'icono-180.png', 'icono-32.png'];
 
 self.addEventListener('install', e => {
