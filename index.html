@@ -750,41 +750,88 @@
   });
 
   // Saca productos y total de las líneas del ticket: "2 PAN BARRA 0,45 0,90" → PAN BARRA 0,90
+  // Corrige confusiones típicas del lector dentro de los números (O→0, l→1, S→5, "1, 23"→"1,23")
+  const arreglarNumeros = l => l
+    .replace(/(\d)\s*([.,])\s+(\d{2})\b/g, '$1$2$3')
+    .replace(/\b([\dOoIlS]{1,4})([.,])([\dOoIlS]{2})\b/g, (m, a, sep, b) => (a + sep + b).replace(/[Oo]/g, '0').replace(/[Il]/g, '1').replace(/S/g, '5'));
+
+  // Saca productos y total de las líneas del ticket: "2 PAN BARRA 0,45 0,90" → PAN BARRA 0,90
   function parsearTicket(texto) {
-    const PRECIO = /(-?\d{1,4}[.,]\d{2})\s*(?:€|EUR|E)?\s*[A-Z*]?\s*$/i;
-    const FUERA = /\b(iva|entregad\w*|cambio|tarjeta|efectivo|base|cuota|visa|mastercard|devoluci\w*|nif|cif|tel[eé]f\w*|fecha|hora|caja|ticket|operaci\w*|autoriz\w*|pagado|redondeo)\b/i;
+    const PRECIO = /(-?\d{1,4}[.,]\d{2})\s*(?:€|EUR|E)?\s*[A-Z*)]?\s*$/i;
+    const SOLO_NUMEROS = /^[\d\s.,x*€%kgKG\/-]+$/;
+    const FUERA = /\b(iva|i\.g\.i\.c|igic|entregad\w*|cambio|tarjeta|efectivo|base|cuota|visa|mastercard|devoluci\w*|nif|cif|tel[eé]f\w*|fecha|hora|caja|ticket|operaci\w*|autoriz\w*|pagado|redondeo|factura|simplificada|cajero|terminal|aid|arc|cuenta|ahorro|puntos|club)\b/i;
+    const TOTAL = /\b(total|a\s*pagar|importe\s*total)\b/i;
+    let lineas = texto.split('\n').map(l => arreglarNumeros(l.trim())).filter(Boolean);
+    // Un nombre sin precio seguido de una línea solo con cantidad/peso y precio → una sola línea
+    const unidas = [];
+    lineas.forEach(l => {
+      const prev = unidas[unidas.length - 1];
+      if (prev && !PRECIO.test(prev) && SOLO_NUMEROS.test(l) && PRECIO.test(l) && /\p{L}{2}/u.test(prev)) unidas[unidas.length - 1] = prev + ' ' + l;
+      else unidas.push(l);
+    });
     const productos = []; let total = null;
-    texto.split('\n').map(l => l.trim()).filter(Boolean).forEach(l => {
+    unidas.forEach(l => {
       const m = l.match(PRECIO); if (!m) return;
-      const c = parse(m[1]); if (!isFinite(c)) return;
-      if (/total/i.test(l)) { if (!/sub/i.test(l)) total = Math.max(total || 0, c); return; }
+      const c = parse(m[1]); if (!isFinite(c) || c === 0) return;
+      if (TOTAL.test(l)) { if (!/sub/i.test(l)) total = Math.max(total || 0, c); return; }
       if (FUERA.test(l)) return;
       const nombre = l.slice(0, m.index)
-        .replace(/(\s*-?\d+[.,]\d{2}\s*(€|EUR)?)+\s*$/i, '')     // precio unitario
-        .replace(/^\d+([.,]\d+)?\s*(x|ud|uds|kg)?\s+/i, '')        // cantidad delante
-        .replace(/[^\p{L}\p{N} .,%\/()+-]/gu, '').replace(/\s+/g, ' ').trim();
+        .replace(/(\s*-?\d+[.,]\d{1,3}\s*(€|EUR|kg|€\/kg)?)+\s*$/i, '')   // precio unitario o peso
+        .replace(/^\d+([.,]\d+)?\s*(x|ud|uds|un|kg)?\s+/i, '')             // cantidad delante
+        .replace(/[^\p{L}\p{N} .,%\/()+-]/gu, '').replace(/\s+/g, ' ').trim()
+        .replace(/\s+\d+[.,]\d+\s*kg\b.*$/i, '')                         // "0,856 kg x" de los productos a peso
+        .replace(/\s+\d{1,3}$/, '').trim();                                // columna de unidades
       if (nombre.replace(/[^\p{L}]/gu, '').length < 2) return;
       productos.push({ n: nombre.charAt(0).toUpperCase() + nombre.slice(1).toLowerCase(), c });
     });
     return { productos, total };
   }
 
+  // Prepara la foto para leerla mejor: tamaño adecuado, escala de grises y más contraste
+  const prepararImagen = file => new Promise((res, rej) => {
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => {
+      const k = Math.min(2.5, 1800 / Math.min(img.width, img.height), 3000 / Math.max(img.width, img.height));
+      const c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      const x = c.getContext('2d'); x.drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+      const d = x.getImageData(0, 0, c.width, c.height), p = d.data, hist = new Array(256).fill(0);
+      for (let i = 0; i < p.length; i += 4) { const g = Math.round(0.299 * p[i] + 0.587 * p[i + 1] + 0.114 * p[i + 2]); p[i] = g; hist[g]++; }
+      // Estira el contraste entre el 2 % más oscuro y el 2 % más claro
+      const n = p.length / 4; let acc = 0, lo = 0, hi = 255;
+      for (let v = 0; v < 256; v++) { acc += hist[v]; if (acc > n * 0.02) { lo = v; break; } }
+      acc = 0; for (let v = 255; v >= 0; v--) { acc += hist[v]; if (acc > n * 0.02) { hi = v; break; } }
+      const rango = Math.max(1, hi - lo);
+      for (let i = 0; i < p.length; i += 4) { const g = Math.max(0, Math.min(255, (p[i] - lo) * 255 / rango)); p[i] = p[i + 1] = p[i + 2] = g; }
+      x.putImageData(d, 0, 0); res(c);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('imagen')); };
+    img.src = url;
+  });
+
+  let ocrTexto = '';  // texto leído de la última factura (se guarda con el gasto para poder revisarlo)
   async function leerFactura(file) {
     const est = $('ocrEstado'); est.hidden = false;
     est.textContent = '🔍 Leyendo productos y precios… (la primera vez tarda un poco más)';
     try {
       if (!window.Tesseract) await cargarScript('https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js');
-      const { data } = await Tesseract.recognize(file, 'spa', { logger: m => {
+      const imagen = await prepararImagen(file);
+      const worker = await Tesseract.createWorker('spa', 1, { logger: m => {
         if (m.status === 'recognizing text') est.textContent = `🔍 Leyendo la factura… ${Math.round(m.progress * 100)}%`;
       } });
+      // Un ticket es un bloque de líneas: se lee así y conservando los espacios entre columnas
+      await worker.setParameters({ tessedit_pageseg_mode: '6', preserve_interword_spaces: '1' });
+      const { data } = await worker.recognize(imagen);
+      await worker.terminate();
+      ocrTexto = data.text.slice(0, 5000);
       const { productos, total } = parsearTicket(data.text);
       productosForm = productos;
       const suma = productos.reduce((a, x) => a + x.c, 0);
       if (!$('gImporte').value && (total || suma)) $('gImporte').value = ((total || suma) / 100).toFixed(2).replace('.', ',');
       renderProductos();
-      est.textContent = productos.length
+      est.innerHTML = (productos.length
         ? `✅ ${productos.length} productos leídos${total ? ' · total del ticket ' + fmt(total) : ''}. Revisa la lista y elige quién pagó.`
-        : '⚠️ No se han podido leer productos. Pon el importe a mano o añade productos con «+ Producto».';
+        : '⚠️ No se han podido leer productos. Pon el importe a mano o añade productos con «+ Producto».')
+        + `<details style="margin-top:6px"><summary>Ver el texto leído</summary><pre style="white-space:pre-wrap;font-size:12px;margin:6px 0 0">${esc(ocrTexto)}</pre></details>`;
       if (!productos.length) { $('productosZona').hidden = false; }
     } catch (e) {
       est.textContent = '⚠️ No se pudo leer la factura (¿sin conexión?). Pon el importe a mano.';
@@ -819,7 +866,7 @@
     modoManual = false; $('botonesInicio').hidden = false;
     editando = null; $('gConcepto').value = ''; $('gImporte').value = ''; $('gPagador').value = ''; ponerFoto(null);
     reparto = new Set(st.turno.personas); comidasForm = new Set(['A', 'C']);
-    productosForm = []; renderProductos(); $('ocrEstado').hidden = true;
+    productosForm = []; ocrTexto = ''; renderProductos(); $('ocrEstado').hidden = true;
     $('tituloForm').textContent = 'Nuevo gasto'; $('btnGuardarGasto').textContent = 'Añadir gasto';
     $('btnCancelarEdicion').style.display = 'none';
   }
@@ -844,6 +891,7 @@
     if (!reparto.size) return toast('Elige entre quién se reparte');
     const previo = editando && t.gastos.find(x => x.id === editando);
     const g = { id: editando || uid(), creado: (previo && previo.creado) || Date.now(), por: st.yo ? st.yo.nombre : '', concepto: $('gConcepto').value.trim(), importe, pagador: $('gPagador').value, entre: [...reparto], comidas: [...comidasForm].sort(), foto: !!fotoForm,
+      ocr: fotoForm ? (ocrTexto || (previo && previo.ocr) || '') : '',
       productos: productosForm.filter(x => x.n.trim() || x.c).map(x => ({ n: x.n.trim() || 'Producto', c: x.c || 0 })) };
     if (fotoForm) { fotoSet(g.id, fotoForm).catch(() => toast('No se pudo guardar la foto')); subirFoto(g.id, fotoForm); }
     else { fotoDel(g.id).catch(() => {}); if (previo && previo.foto) borrarFotoNube(g.id); }
