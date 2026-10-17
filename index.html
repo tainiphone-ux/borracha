@@ -106,6 +106,8 @@
   .grande span { font-size: 15px; }
   .add-persona { border-top: 1px solid var(--borde); margin-top: 14px; padding-top: 4px; }
   .add-persona > label:first-child { font-weight: 600; color: var(--txt); font-size: 15px; }
+  .resumen-borracha { margin: -4px 0 10px; font-size: 14px; color: var(--sub); }
+  .chip.trae { border-style: dashed; color: var(--sub); }
   .lista { list-style: none; margin: 0; padding: 0; }
   .lista li { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--borde); }
   .lista li:last-child { border-bottom: 0; }
@@ -164,8 +166,9 @@
 
     <div class="card">
       <h2>¿Quién está de turno?</h2>
+      <p class="resumen-borracha" id="resumenBorracha"></p>
       <div class="chips" id="chipsTurno"></div>
-      <p class="ayuda">Toca un nombre para cambiarlo por otra persona, quitarlo o incluirlo.</p>
+      <p class="ayuda">Toca un nombre para cambiarlo por otra persona, sacarlo de la borracha si trae su comida, quitarlo o incluirlo.</p>
       <div class="add-persona">
         <label for="nuevoNombre">➕ Añadir persona</label>
         <div class="fila">
@@ -517,19 +520,28 @@
     document.querySelector('header h1').textContent = `Borracha · ${etiqueta(t)}`;
 
     // Turno: chips
+    const nTraen = (t.traen || []).length;
+    $('resumenBorracha').innerHTML = `🍽️ <b>${t.personas.length}</b> en la borracha` + (nTraen ? ` · 🥪 ${nTraen} ${nTraen === 1 ? 'trae' : 'traen'} su comida` : '');
     const ct = $('chipsTurno'); ct.innerHTML = '';
     if (!plantilla().length) ct.innerHTML = '<p class="vacio">Añade a tus compañeros/as abajo.</p>';
     const ausencia = n => (t.cambios || []).find(c => c.quien === n && !t.personas.includes(n));
     // Quien ha sido sustituido desaparece y su sustituto ocupa su sitio en la lista
     const sustitutos = new Set();
+    // Quien trabaja pero trae su comida no entra en la borracha (el grupo que come junto)
+    const traen = t.traen || [];
+    const chipPersona = n => {
+      if (traen.includes(n)) { const c = chip(`${n} · 🥪 trae su comida`, false, () => abrirMenuPersona(n)); c.classList.add('trae'); return c; }
+      return chip(n, t.personas.includes(n), () => abrirMenuPersona(n));
+    };
+    const presente = n => t.personas.includes(n) || traen.includes(n);
     plantilla().forEach(n => {
       const c = ausencia(n);
-      if (!c) return ct.appendChild(chip(n, t.personas.includes(n), () => abrirMenuPersona(n)));
-      if (c.sustituto && t.personas.includes(c.sustituto)) { sustitutos.add(c.sustituto); ct.appendChild(chip(c.sustituto, true, () => abrirMenuPersona(c.sustituto))); }
+      if (!c) return ct.appendChild(chipPersona(n));
+      if (c.sustituto && presente(c.sustituto)) { sustitutos.add(c.sustituto); ct.appendChild(chipPersona(c.sustituto)); }
     });
     // Personas añadidas que no son de la lista fija (visitas…): borde discontinuo
-    t.personas.filter(n => !plantilla().includes(n) && !sustitutos.has(n)).forEach(n => {
-      const c = chip(n, true, () => abrirMenuPersona(n));
+    [...t.personas, ...traen].filter(n => !plantilla().includes(n) && !sustitutos.has(n)).forEach(n => {
+      const c = chipPersona(n);
       c.classList.add('extra'); ct.appendChild(c);
     });
     $('txtFijo').textContent = `Guardarla fija en la lista de ${etiqueta(t)}`;
@@ -905,7 +917,8 @@
     const r = calcular(t);
     let s = `🚒 Borracha – comida del turno – ${fechaTxt(t.fecha)} (${etiqueta(t)})\n`;
     if (st.yo) s += `Enviado por ${st.yo.nombre}\n`;
-    s += `Total: ${fmt(r.total)} · ${t.personas.length} personas\n`;
+    s += `Total: ${fmt(r.total)} · ${t.personas.length} en la borracha\n`;
+    if ((t.traen || []).length) s += `🥪 Traen su comida: ${t.traen.join(', ')}\n`;
     s += `\n🧾 Gastos:\n`;
     t.gastos.forEach(g => s += `• ${g.concepto || 'Gasto'} [${txtComidas(comidasGasto(g))}]: ${fmt(g.importe)} (pagó ${g.pagador})${g.foto ? ' 🧾' : ''}\n${(g.productos || []).map(x => `    – ${x.n}: ${fmt(x.c)}\n`).join('')}`);
     s += `\n💸 Pagos:\n`;
@@ -1138,20 +1151,32 @@
 
   // ---------- Menú al tocar a una persona del turno ----------
   function abrirMenuPersona(n) {
-    const t = st.turno, esta = t.personas.includes(n);
+    const t = st.turno, esta = t.personas.includes(n), trae = (t.traen || []).includes(n);
     const cambio = (t.cambios || []).find(c => c.quien === n || c.sustituto === n);
     $('mpNombre').textContent = n;
-    $('mpEstado').textContent = cambio ? (cambio.quien === n ? (cambio.sustituto ? `Le sustituye ${cambio.sustituto}` : 'Hoy no viene') : `Sustituye a ${cambio.quien}`)
-      : esta ? 'Está en el turno de hoy' : 'No está en el turno de hoy';
+    $('mpEstado').textContent = trae ? 'Trabaja hoy, pero trae su comida: no entra en la borracha'
+      : cambio ? (cambio.quien === n ? (cambio.sustituto ? `Le sustituye ${cambio.sustituto}` : 'Hoy no viene') : `Sustituye a ${cambio.quien}`)
+      : esta ? 'Come hoy con la borracha' : 'No está en el turno de hoy';
     const acc = $('mpAcciones'); acc.innerHTML = '';
     const boton = (txt, cls, fn) => { const b = document.createElement('button'); b.className = cls; b.textContent = txt; b.onclick = () => { cerrarMenuPersona(); fn(); }; acc.appendChild(b); };
     if (esta) boton('🔄 Cambiar por otra persona', 'btn', () => abrirCambio(n));
-    if (cambio) boton('↩️ Deshacer el cambio', 'btn-sec', () => deshacerCambio(cambio));
+    if (esta) boton('🥪 Trae su comida (fuera de la borracha)', 'btn-sec', () => traeComida(n, true));
+    if (trae) boton('🍽️ Vuelve a comer con la borracha', 'btn', () => traeComida(n, false));
+    if (cambio && !trae) boton('↩️ Deshacer el cambio', 'btn-sec', () => deshacerCambio(cambio));
     if (esta) boton('➖ Hoy no viene (quitar)', 'btn-sec', () => { t.personas = t.personas.filter(x => x !== n); reparto.delete(n); t.pagados = {}; t.avisados = {}; guardar(); render(); });
-    else if (!cambio) boton('➕ Incluir en el turno de hoy', 'btn', () => { t.personas = [...t.personas, n]; reparto.add(n); t.pagados = {}; t.avisados = {}; guardar(); render(); });
+    else if (!cambio && !trae) boton('➕ Incluir en el turno de hoy', 'btn', () => { t.personas = [...t.personas, n]; reparto.add(n); t.pagados = {}; t.avisados = {}; guardar(); render(); });
     $('menuPersona').hidden = false;
   }
   function cerrarMenuPersona() { $('menuPersona').hidden = true; }
+  // Saca a alguien de la borracha porque trae su comida (sigue saliendo como que trabaja), o lo devuelve
+  function traeComida(n, si) {
+    const t = st.turno;
+    t.traen = (t.traen || []).filter(x => x !== n);
+    if (si) { t.traen.push(n); t.personas = t.personas.filter(x => x !== n); reparto.delete(n); }
+    else if (!t.personas.includes(n)) { t.personas.push(n); reparto.add(n); }
+    t.pagados = {}; t.avisados = {}; guardar(); render();
+    toast(si ? `${saludo(n)} trae su comida: fuera de la borracha` : `${saludo(n)} vuelve a la borracha`);
+  }
   $('mpCancelar').onclick = cerrarMenuPersona;
   $('menuPersona').onclick = e => { if (e.target === $('menuPersona')) cerrarMenuPersona(); };
   function guardarCambio() {
@@ -1225,9 +1250,9 @@
     const t = st.turno, gastos = {};
     t.gastos.forEach(g => { gastos[g.id] = g; });
     const datos = { parque: t.parque, num: t.num, fecha: t.fecha, personas: t.personas, comidas: t.comidas || {}, cambios: t.cambios || [],
-      pagados: t.pagados || {}, gastos, actualizado: firebase.firestore.FieldValue.serverTimestamp(), por: st.yo ? st.yo.nombre : '' };
+      pagados: t.pagados || {}, traen: t.traen || [], gastos, actualizado: firebase.firestore.FieldValue.serverTimestamp(), por: st.yo ? st.yo.nombre : '' };
     // Los gastos se fusionan uno a uno (para no pisar los que añade otro a la vez); el resto se reemplaza
-    const campos = ['parque', 'num', 'fecha', 'personas', 'comidas', 'cambios', 'pagados', 'actualizado', 'por', ...t.gastos.map(g => 'gastos.' + g.id)];
+    const campos = ['parque', 'num', 'fecha', 'personas', 'comidas', 'cambios', 'pagados', 'traen', 'actualizado', 'por', ...t.gastos.map(g => 'gastos.' + g.id)];
     db.collection('turnos').doc(idTurno(t)).set(datos, { mergeFields: campos }).catch(e => estadoNube('⚠️', 'No se pudo guardar en la nube: ' + e.code));
   }
 
@@ -1260,7 +1285,7 @@
       remotos.filter(g => !t.gastos.some(x => x.id === g.id) && g.por !== yo).forEach(g => toast(`🧾 ${saludo(g.pagador)} ha añadido ${g.concepto || 'un gasto'}: ${fmt(g.importe)}`));
     }
     if (r.personas) t.personas = r.personas;
-    t.comidas = r.comidas || {}; t.cambios = r.cambios || []; t.pagados = r.pagados || {};
+    t.comidas = r.comidas || {}; t.cambios = r.cambios || []; t.pagados = r.pagados || {}; t.traen = r.traen || [];
     t.gastos = [...remotos, ...soloAqui].sort((a, b) => (a.creado || 0) - (b.creado || 0));
     reparto = new Set([...reparto].filter(n => t.personas.includes(n)));
     guardarLocal(); render();
