@@ -362,6 +362,9 @@
   const KEY = 'comida-turno-v1';
   const $ = id => document.getElementById(id);
   const hoy = () => { const d = new Date(); return new Date(d - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10); };
+  // La guardia va de 8:00 a 8:00: antes de las 8 todavía cuenta como la guardia del día anterior
+  const HORA_RELEVO = 8;
+  const fechaGuardia = () => { const d = new Date(Date.now() - HORA_RELEVO * 3600e3); return new Date(d - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10); };
   const uid = () => Math.random().toString(36).slice(2, 10);
 
   const PARQUES = ['B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7'];
@@ -410,7 +413,7 @@
   // ---------- Estado ----------
   // Por defecto: el parque y turno de quien usa el móvil; si aún no se ha identificado, B2 · Turno 4
   const POR_DEFECTO = { parque: 'B2', num: 4 };
-  const nuevoTurno = (parque = (st && st.yo && st.yo.parque) || POR_DEFECTO.parque, num = (st && st.yo && st.yo.num) || POR_DEFECTO.num, personas = []) => ({ id: uid(), fecha: hoy(), parque, num, personas, gastos: [], pagados: {} });
+  const nuevoTurno = (parque = (st && st.yo && st.yo.parque) || POR_DEFECTO.parque, num = (st && st.yo && st.yo.num) || POR_DEFECTO.num, personas = []) => ({ id: uid(), fecha: fechaGuardia(), parque, num, personas, gastos: [], pagados: {} });
   let st;
   try { st = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
   const primeraVez = !st || !st.turno;
@@ -1129,6 +1132,18 @@
 
   if (primeraVez) st.turno.personas = [...plantilla()];
 
+  // Al abrir la app (o volver a ella) en una guardia nueva, el turno pasa a la fecha de hoy.
+  // Si el turno anterior tenía gastos, se guarda en el historial.
+  function actualizarFecha() {
+    const t = st.turno, f = fechaGuardia();
+    if (!t.fecha || t.fecha >= f) return false;
+    if (t.gastos.length) st.historial.unshift(t);
+    st.turno = nuevoTurno(t.parque, t.num); st.turno.personas = [...plantilla()];
+    guardarLocal();
+    return t.gastos.length ? `El turno del ${fechaTxt(t.fecha)} se ha guardado en el historial` : true;
+  }
+  const avisoFecha = actualizarFecha();
+
   // ---------- Alta: parque, turno y persona del dueño del teléfono ----------
   const alta = { parque: st.yo?.parque || POR_DEFECTO.parque, num: st.yo?.num || POR_DEFECTO.num, nombre: st.yo?.nombre || '' };
   function renderAlta() {
@@ -1289,7 +1304,7 @@
       estadoNube('🟢', 'Conectado: los del mismo parque y turno veis lo mismo');
       registrarUsuario(); escucharUsuarios(); escucharTurno();
     } catch (e) {
-      estadoNube('⚪', 'Sin conexión: los datos se guardan solo en este móvil');
+      estadoNube('⚪', 'Sin conexión: los datos se guardan solo en este móvil' + (e && (e.code || e.message) ? ` (${e.code || e.message})` : ''));
     }
   }
 
@@ -1373,6 +1388,12 @@
   }
 
   limpiarForm(); render();
+  if (typeof avisoFecha === 'string') toast(avisoFecha);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    const r = actualizarFecha();
+    if (r) { limpiarForm(); render(); sincronizar(); if (typeof r === 'string') toast(r); }
+  });
   // ?nube=0 abre la app sin conexión (para pruebas sin tocar los datos compartidos)
   if (/[?&]nube=0/.test(location.search)) estadoNube('⚪', 'Modo prueba: sin conexión'); else iniciarNube();
 })();
