@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="icono-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icono-32.png">
 <link rel="icon" type="image/svg+xml" href="icono.svg">
-<link id="manifest" rel="manifest" href="">
+<link rel="manifest" href="manifest.webmanifest">
 <style>
   :root {
     --rojo: #c62828; --rojo-osc: #8e0000; --ambar: #ffb300;
@@ -111,6 +111,10 @@
   .chip.trae { border-style: dashed; color: var(--sub); }
   .logo { width: 32px; height: 32px; border-radius: 8px; box-shadow: 0 0 0 1.5px rgba(255,255,255,.35); flex: 0 0 auto; }
   .logo-grande { width: 84px; height: 84px; border-radius: 20px; }
+  .banner-instalar { display: flex; align-items: center; gap: 12px; }
+  .banner-instalar[hidden] { display: none; }
+  .banner-instalar > div { flex: 1; }
+  .banner-instalar small { display: block; color: var(--sub); font-size: 13px; }
   .lista { list-style: none; margin: 0; padding: 0; }
   .lista li { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--borde); }
   .lista li:last-child { border-bottom: 0; }
@@ -158,6 +162,10 @@
 <main>
   <!-- TURNO -->
   <section id="s-turno" class="activa">
+    <div class="card banner-instalar" id="bannerInstalar" hidden>
+      <div><b>📲 Instala Borracha</b><small>Tenla como app en tu pantalla de inicio</small></div>
+      <button class="btn fijo" id="btnInstalar">Instalar</button>
+    </div>
     <div class="card">
       <h2>Parque de bomberos</h2>
       <div class="turnos parques" id="selParque"></div>
@@ -1112,21 +1120,16 @@
     window.scrollTo(0, 0);
   });
 
-  // ---------- Icono y manifest (para "Añadir a pantalla de inicio") ----------
-  // Icono: cubiertos y llama (icono.svg, con sus PNG en 32, 180, 192 y 512 px)
-  try {
-    const base = location.href.split(/[?#]/)[0].replace(/[^/]*$/, '');
-    const manifest = {
-      name: 'Borracha', short_name: 'Borracha', display: 'standalone',
-      start_url: base, scope: base,
-      background_color: '#c62828', theme_color: '#c62828',
-      icons: [
-        { src: base + 'icono-192.png', sizes: '192x192', type: 'image/png' },
-        { src: base + 'icono-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
-      ]
-    };
-    $('manifest').href = 'data:application/manifest+json,' + encodeURIComponent(JSON.stringify(manifest));
-  } catch (e) {}
+  // ---------- Instalar como app (manifest.webmanifest + sw.js) ----------
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  // En Android, Chrome avisa de que se puede instalar: mostramos un botón para hacerlo con un toque
+  let avisoInstalar = null;
+  window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); avisoInstalar = e; $('bannerInstalar').hidden = false; });
+  window.addEventListener('appinstalled', () => { $('bannerInstalar').hidden = true; toast('Borracha instalada'); });
+  $('btnInstalar').onclick = async () => {
+    if (!avisoInstalar) return;
+    avisoInstalar.prompt(); await avisoInstalar.userChoice.catch(() => {}); avisoInstalar = null; $('bannerInstalar').hidden = true;
+  };
 
   if (primeraVez) st.turno.personas = [...plantilla()];
 
