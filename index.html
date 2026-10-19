@@ -1288,7 +1288,11 @@
   function mostrarCuadrante() {
     const t = st.turno, est = $('cuaEstado');
     const actuales = [...t.personas, ...(t.traen || [])];
-    if (!cuaDetectados.length) { est.textContent = '⚠️ No he reconocido a nadie. Prueba con una foto más cerca, recta y con buena luz.'; return; }
+    if (!cuaDetectados.length) {
+      est.innerHTML = '⚠️ No he reconocido a nadie. Prueba con una foto más cerca, recta y con buena luz.'
+        + `<details style="margin-top:6px"><summary>Ver el texto leído</summary><pre style="white-space:pre-wrap;font-size:12px">${esc($('cuaTexto').textContent)}</pre></details>`;
+      return;
+    }
     est.textContent = `✅ He reconocido a ${cuaDetectados.length} ${cuaDetectados.length === 1 ? 'persona' : 'personas'} en el cuadrante.`;
     const fila = (n, marcado, nota) => {
       const li = document.createElement('li');
