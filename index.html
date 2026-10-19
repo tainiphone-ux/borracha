@@ -1318,22 +1318,18 @@
     const t = st.turno;
     const vienen = [...document.querySelectorAll('#cuaVienen input, #cuaNo input')].filter(i => i.checked).map(i => i.dataset.nombre);
     if (!vienen.length) return toast('Marca al menos a una persona');
-    const antes = [...t.personas, ...(t.traen || [])];
-    // Los que no vienen dejan su sitio a los nuevos, en orden (así el nuevo ocupa el hueco en la lista)
-    const noVienen = antes.filter(n => !vienen.includes(n));
-    const nuevos = vienen.filter(n => !antes.includes(n));
-    t.cambios = (t.cambios || []).filter(c => !noVienen.includes(c.sustituto) && !vienen.includes(c.quien));
-    noVienen.forEach((n, i) => {
-      const previo = t.cambios.find(c => c.sustituto === n);
-      if (previo) return;
-      t.cambios.push({ id: uid(), quien: n, sustituto: nuevos[i] || '' });
-    });
+    // El cuadrante manda: se rehacen los cambios desde la lista fija del turno.
+    // Cada uno de la lista que no viene deja su hueco al siguiente nuevo (y desaparece de la lista).
+    const lista = plantilla();
+    const nuevos = vienen.filter(n => !lista.includes(n));
+    t.cambios = lista.filter(n => !vienen.includes(n)).map(n => ({ id: uid(), quien: n, sustituto: nuevos.shift() || '' }));
     t.traen = (t.traen || []).filter(n => vienen.includes(n));
     t.personas = vienen.filter(n => !t.traen.includes(n));
     reparto = new Set(t.personas);
     t.pagados = {}; t.avisados = {};
     guardar(); render(); $('hojaCuadrante').hidden = true;
-    toast(`Turno actualizado: ${t.personas.length} en la borracha` + (nuevos.length ? ` · ${nuevos.length} ${nuevos.length === 1 ? 'nuevo' : 'nuevos'}` : ''));
+    const entran = vienen.filter(n => !lista.includes(n)).length;
+    toast(`Turno actualizado: ${t.personas.length} en la borracha` + (entran ? ` · ${entran} ${entran === 1 ? 'sustituto' : 'sustitutos'}` : ''));
   }
 
   $('btnCuadrante').onclick = () => $('inCuadrante').click();
@@ -1569,7 +1565,7 @@
     const t = st.turno, yo = st.yo && st.yo.nombre;
     const remotos = Object.values(r.gastos || {});
     // La primera vez, los gastos que solo están en este móvil se suben
-    const soloAqui = primera ? t.gastos.filter(g => !(r.gastos || {})[g.id]) : [];
+    const soloAqui = primera ? t.gastos.filter(g => !(r.gastos || {})[g.id] && !(r.borrados || []).includes(g.id)) : [];
     // Avisos dentro de la app
     if (!primera) {
       const antes = t.pagados || {}, ahora = r.pagados || {};
@@ -1592,7 +1588,7 @@
 
   function borrarGastoNube(id) {
     if (!db) return;
-    db.collection('turnos').doc(idTurno(st.turno)).update({ ['gastos.' + id]: firebase.firestore.FieldValue.delete() }).catch(() => {});
+    db.collection('turnos').doc(idTurno(st.turno)).update({ ['gastos.' + id]: firebase.firestore.FieldValue.delete(), borrados: firebase.firestore.FieldValue.arrayUnion(id) }).catch(() => {});
     borrarFotoNube(id);
   }
   function subirFoto(id, d) { if (db) db.collection('fotos').doc(id).set({ d, turno: idTurno(st.turno) }).catch(() => toast('La foto no se pudo compartir')); }
