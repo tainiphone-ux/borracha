@@ -1237,7 +1237,9 @@
     //    (el lector a veces confunde cifras: 331 → 431)
     bomberos.forEach(b => {
       if (!b.num || encontrados.has(b.nombre)) return;
-      const conNumero = lineas.map((l, i) => i).filter(i => enLinea(lineas[i], b.num));
+      // Las líneas de fecha y cabecera no cuentan: «20/10/2026» se puede leer como «201 0»
+      const esCabecera = l => /\d\s*\/\s*\d|\b20\d\d\b|\b(lunes|martes|miercoles|jueves|viernes|sabado|domingo|turno|parque|cuadrante)\b/.test(l);
+      const conNumero = lineas.map((l, i) => i).filter(i => !esCabecera(lineas[i]) && enLinea(lineas[i], b.num));
       if (!conNumero.length) return;
       const apellidos = palabras(b).slice(-2);
       const valido = conNumero.some(i => !nombradosEn[i].length || apellidos.some(w => enLinea(lineas[i], w)));
