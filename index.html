@@ -754,14 +754,19 @@
     guardar(); render(); toast(`${real} añadido/a`);
   }
 
-  function elegir(parque, n) {
+  // Cambiar de parque, turno o fecha es abrir OTRO turno: el actual se queda como está (en la nube),
+  // y el nuevo empieza con su gente (o con lo que ya hayan apuntado los compañeros en la nube).
+  function cambiarTurno(parque, n, fecha = st.turno.fecha) {
     const t = st.turno;
-    if (t.parque === parque && t.num === n) return;
-    t.parque = parque; t.num = n;
-    // Si aún no hay gastos, cargamos la gente de ese parque y turno
-    if (!t.gastos.length) { t.personas = [...plantilla()]; reparto = new Set(t.personas); }
-    guardar(); render();
+    if (t.parque === parque && t.num === n && t.fecha === fecha) return;
+    // Sin conexión, lo apuntado en este turno se guarda en el historial para no perderlo
+    if (!db && t.gastos.length) st.historial.unshift(t);
+    st.turno = nuevoTurno(parque, n); st.turno.fecha = fecha;
+    st.turno.personas = [...plantilla(parque, n)];
+    reparto = new Set(st.turno.personas);
+    limpiarForm(); guardar(); render();
   }
+  const elegir = (parque, n) => cambiarTurno(parque, n);
 
   // ---------- Fotos de facturas (IndexedDB: caben muchas más que en localStorage) ----------
   let fotoForm = null;  // foto (dataURL) del gasto que se está editando
@@ -1094,9 +1099,8 @@
   $('btnAddPersona').onclick = addDesdeTurno;
   $('nuevoNombre').onkeydown = e => { if (e.key === 'Enter') addDesdeTurno(); };
   $('fecha').onchange = e => {
-    st.turno.fecha = e.target.value; guardar();
     // Proponemos el turno que estaba de guardia ese día
-    if (e.target.value) elegir(st.turno.parque, turnoDeFecha(e.target.value));
+    if (e.target.value) cambiarTurno(st.turno.parque, turnoDeFecha(e.target.value), e.target.value);
   };
   $('moneda').onchange = e => { st.moneda = e.target.value; guardar(); render(); };
   $('btnGuardarGasto').onclick = guardarGasto;
@@ -1197,7 +1201,7 @@
     st.yo = { parque: alta.parque, num: alta.num, nombre, desde: new Date().toISOString() };
     if (!plantilla(alta.parque, alta.num).includes(nombre)) plantilla(alta.parque, alta.num).push(nombre);
     // El turno de hoy empieza en su parque
-    if (!st.turno.gastos.length) elegir(alta.parque, alta.num);
+    cambiarTurno(alta.parque, alta.num);
     guardar(); $('alta').hidden = true; render(); toast(`¡Hola, ${nombre}!`); registrarUsuario(); estadoNotis();
   };
   // ---------- Cuadrante del día: foto → quién viene ----------
