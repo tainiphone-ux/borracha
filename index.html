@@ -115,6 +115,9 @@
   .banner-instalar[hidden] { display: none; }
   .banner-instalar > div { flex: 1; }
   .banner-instalar small { display: block; color: var(--sub); font-size: 13px; }
+  .cua-lista li { padding: 8px 0; }
+  .cua-lista label.check { margin: 0; flex: 1; }
+  .cua-lista small { color: var(--sub); font-size: 12px; margin-left: 4px; }
   .lista { list-style: none; margin: 0; padding: 0; }
   .lista li { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--borde); }
   .lista li:last-child { border-bottom: 0; }
@@ -182,6 +185,9 @@
     <div class="card">
       <h2>¿Quién está de turno?</h2>
       <p class="resumen-borracha" id="resumenBorracha"></p>
+      <button class="btn-sec btn-full" id="btnCuadrante" style="margin:0 0 12px">📷 Sacar foto del cuadrante</button>
+      <input type="file" id="inCuadrante" accept="image/*" capture="environment" hidden>
+      <input type="file" id="inCuadranteArchivo" accept="image/*,application/pdf" hidden>
       <div class="chips" id="chipsTurno"></div>
       <p class="ayuda">Toca un nombre para cambiarlo por otra persona, sacarlo de la borracha si trae su comida, quitarlo o incluirlo.</p>
       <div class="add-persona">
@@ -337,6 +343,23 @@
     <button class="btn-sec btn-full" id="mpCancelar">Cancelar</button>
   </div>
 </div>
+<div class="alta" id="hojaCuadrante" hidden>
+  <div class="alta-caja">
+    <h2 style="margin:0 0 4px">📷 Cuadrante del día</h2>
+    <p class="ocr-estado" id="cuaEstado"></p>
+    <div id="cuaResultado" hidden>
+      <p class="ayuda" style="margin-top:8px">Revisa y desmarca a quien no venga. Al aplicar, los que vienen sustituyen a los que no.</p>
+      <label>✅ Vienen según el cuadrante</label>
+      <ul class="lista cua-lista" id="cuaVienen"></ul>
+      <label id="cuaNoTit">❌ No salen en el cuadrante (no vienen)</label>
+      <ul class="lista cua-lista" id="cuaNo"></ul>
+      <details style="margin-top:10px"><summary class="ayuda">Ver el texto leído</summary><pre id="cuaTexto" style="white-space:pre-wrap;font-size:12px"></pre></details>
+      <button class="btn btn-full" id="cuaAplicar">Aplicar al turno</button>
+    </div>
+    <button class="btn-ghost btn-full" id="cuaOtro">🖼️ Elegir imagen o PDF de la galería</button>
+    <button class="btn-sec btn-full" id="cuaCancelar">Cancelar</button>
+  </div>
+</div>
 <div class="alta" id="hojaCambio" hidden>
   <div class="alta-caja">
     <h2 style="margin:0 0 4px">🔄 Sustituir a una persona</h2>
@@ -424,6 +447,8 @@
     "B7-4": ["Julián Antonio Noda Correa", "Fausto Guillén Iranzo", "Guardia extra 1", "Guardia extra 2"],
     "B7-5": ["Lucas Pérez Suárez", "Pablo Iván Gutiérrez Ferreiro", "Guardia extra 1", "Guardia extra 2"],
   };
+  // Número de bombero → nombre (para reconocer el cuadrante del día)
+  const NUMEROS = {"177": "José Inocente Bencomo González", "226": "David Ponte-Lira Pestana", "212": "Emilio Bolívar Sánchez-Cañete", "342": "Manuel Rodríguez Martín", "252": "José Carmelo Pascual Fernández", "333": "Miguel Ángel Morales García", "306": "Marcos Alexis León Pérez", "312": "Daniel Herrera Negrín", "385": "Ruymán José Expósito González", "344": "Andrés Afonso Mendoza", "329": "José Manuel Afonso Martín", "291": "Cristo Moisés Acosta Martín del Río", "243": "Wimmer J. González Delgado", "189": "Edilberto Jesús Lavín Rodríguez", "336": "Airam Rodríguez Delgado", "289": "Andrés Reyes Hernández", "408": "Abraham Miranda Cáceres", "303": "Damián Luis Hernández Alberto", "285": "Isidro Felipe Pérez", "327": "Tamarán Brito Baute", "322": "José Vicente Baute Curbelo", "167": "Enrico Alberto Acosta Ramos", "396": "Daniel Hernández Cejas", "229": "Carmelo Daniel Zerpa Armas", "170": "Víctor Manuel Pineda Díaz", "187": "Jorge Juan Mora Hernández", "202": "Carlos Alberto Lorenzo Herrera", "218": "Carmelo Suárez Pérez", "387": "Rubén Eladio Rodríguez Vera", "313": "Glendor Rodríguez Hernández", "318": "David Pérez Pérez", "335": "Ildefonso Martínez Siverio", "283": "Salvador López-Peñalver Hernández", "271": "Ramón Juan Darias Fariña", "292": "Ricardo Berlanga López", "341": "Juan Víctor Yanes Díaz", "214": "Juan Manuel Martín Remón", "188": "Benjamín García Hernández", "323": "Iván Domínguez Tejera", "270": "Carlos García de la Rosa", "401": "Jonathan Pérez Melián", "310": "Ismael Rodríguez Baute", "390": "Enrique Luis Aznar", "412": "Ezequiel Borges Castañeda", "207": "Juan Ramón Rodríguez Zamora", "400": "Sergio González Rodríguez", "386": "Óscar Pérez Afonso", "369": "Ángel del Castillo Torralba", "305": "Daniel Cabrera Estévez", "282": "Sergio Alejandro Díaz Luque", "171": "Rafael Fernández Fernández", "220": "Rafael Marcos León", "206": "Jaime Tomás López Betancort", "298": "Yapci Rodríguez Hernández", "357": "Ricardo Peña Pérez", "392": "Carlos Hernández González", "262": "José Fernando Domínguez Fuentes", "294": "Balbino Carrasco Pérez", "251": "José Acuña Díaz", "240": "Miguel Puerta Rodríguez", "326": "Eduardo Muñoz Betolaza", "351": "Antonio Mario Castillo Hernández", "300": "Vicente Alexis Alonso González", "350": "Víctor San Baudelio Pérez", "216": "Alberto Betancor Orgaz", "261": "Sergio González de León", "309": "Enrique Jesús de la Rosa Gómez", "296": "Oliver González de León", "267": "Miguel Ángel González Pérez", "245": "Sergio Mielgo Martínez", "432": "Víctor Alejandro Arroyo Santana", "375": "José Víctor Padilla García", "227": "José Ignacio Delgado Martín", "269": "Víctor Manuel Abrante Salcedo", "304": "Juan Carlos Batista Álvarez", "358": "Óscar Cabrera Panadero", "356": "Juan Pedro Ceballo Rodríguez", "308": "David Oliver Dreyer Cabezón", "299": "Jesús Benjamín Espila Sánchez", "235": "Ricardo Palomares González", "222": "Manuel Gómez Feliciano", "399": "Borja Carballo Hernández", "293": "Eduardo Hernández Medina", "338": "César Davara González", "253": "Abraham Fariña Coello", "307": "Jesús David Vera Torres", "192": "Valentín Suárez Morín", "224": "Felipe Betancor Orgaz", "406": "Samuel Benito Chávez Torres", "394": "Guillermo Díaz Ríos", "405": "Añaterve García Vera", "231": "Antonio Reche Pérez", "418": "José Allgayer Rodríguez", "421": "Luis Javier Álvarez Insua", "217": "Augusto Remón Carballo", "221": "Fernando Batista Álvarez", "347": "Isidro Falcón González", "393": "Pedro Luis García González", "346": "Pedro Luciano González Quintero", "272": "Juan Miguel Alemán González", "427": "Héctor Quintana Ojeda", "204": "Juan José de Cáceres Serra", "275": "Juan Antonio Sosa Regalado", "208": "Amilcar Borges Rodríguez", "255": "Antonio Nogueira Gutiérrez", "256": "David Cuéllar Estévez", "284": "David Ramallo Padrón", "388": "Ubay Báez Barroso", "398": "Oliver Mesa Evans", "186": "Ramón Morín García", "196": "José Alberto Gómez Gómez", "244": "Federico Angulo Casado", "330": "Oliverio Delgado Aguiar", "337": "Manuel Borges Márquez", "355": "Carlos Alberto Orenes Castellano", "419": "Javier Andrés Pérez de la Rosa", "426": "Darío Triviño Luque", "175": "José Zebensuí Riquelme Gómez", "200": "Gonzalo Chávez Real", "348": "Omar Prieto Chico", "411": "Josué de Vera Rodríguez", "424": "José Manuel Sevilla Moyano", "425": "Jerónimo de Armas Fernández", "428": "Álvaro Cruz Pérez", "259": "Miguel Díaz Ruiz", "416": "Adrián Joel Cruz Hernández", "422": "Imobach Adasat Estévez Camacho", "429": "Yeray Cabrera Hernández", "431": "Daniel José Perdomo Alonso", "430": "Ancor Rodal Delgado", "254": "Raúl Montes García", "193": "Juan Luis Peraza Santana", "233": "Diego Costumero Núñez", "265": "Francisco Javier Sevillano Heras", "360": "Cristóbal Jesús Gil Martín", "391": "Joel Delgado Moseguez", "414": "Roberto Mira García", "420": "Mariano Eduardo Alonso Melián", "195": "Maximino Delgado Hernández", "397": "Daniel Rosquete Rodríguez", "215": "David Armas de León", "368": "Gregorio Álvaro Martínez", "423": "Jonathan González Luis", "436": "Alejandro Antonio de Furundarena González de Chaves", "234": "José Manuel Molina León", "279": "Sergio Leandro Rodríguez", "349": "Marco Antonio Mejías León", "417": "Juan José Pérez Toledo", "249": "Jorge Pérez Cabrera", "317": "Pedro Jesús Castro Rodríguez", "409": "Eduardo Cabello Acevedo", "415": "Héctor Castro Alonso", "250": "Jorge Rayco González Afonso", "370": "Jesús Ignacio Martínez Camarero", "434": "Jorge Práxedes Herrera", "339": "Gerován Abreu Pérez", "237": "Rubén Pérez Hernández", "203": "Víctor Hernández Navarro", "277": "Alberto Campos Marichal", "352": "Juan Casanova González", "241": "Juan José Cruz Pérez", "302": "Ángel David de Francisco Hernández", "205": "Manuel Carlos Tejera Rodríguez", "286": "Roberto Torres Expósito", "230": "David Díaz Francisco", "319": "Alejandro Marichal Torres", "402": "Airam Afonso Henríquez", "374": "Bernardo López Núñez", "316": "Antonio Morales Navarro", "169": "José Carlos Pérez García", "209": "Enrique Rodríguez Rodríguez", "410": "Rafael Fernández Alvarado", "232": "Fernando López Betancor", "174": "Iván Francisco Padrón Peñalver", "278": "Briac Badt Abad", "334": "Moisés González Suárez", "340": "Jesús María Perera Rodríguez", "247": "Josué Rodríguez Armas", "384": "Patxi Otamendi Burgui", "155": "Andrés Perdomo Perdomo", "172": "Salvador Peraza Santana", "301": "Jesús Luis Puerta García", "413": "Salvador García Toledano", "201": "Juan Antonio Ruano Burgos", "248": "Elicio Treviño Sánchez", "403": "Xerach Afonso Rodríguez", "184": "Andrés de la Rosa Hernández", "225": "Juan José de la Rosa Hernández", "264": "Eusebio Carlos Delgado González", "343": "Luis Miguel Delgado Martín", "257": "David Milla Alonso", "332": "José Montserrat Expósito Rosado", "395": "Asier Amador Robayna", "377": "Cristóbal de la Rosa Rodríguez", "268": "Rodolfo Fernández Revenga", "345": "Francisco González Salguero", "404": "Daniel Francisco Mora Navarro", "407": "David Benavente Expósito", "281": "Francisco Alberto Marrero Conde", "314": "David Hernández Cabrera", "287": "Jonathan Rodríguez Castellano", "433": "Armando Alby Bailón Quesada", "199": "Antonio Luis Morales Pérez", "359": "Pedro Azuaga Toré", "389": "David Román Lillo", "280": "Oliver Losada Roque", "274": "Paulo Cabrera Robayna", "325": "Reinaldo Delgado Gil", "376": "Pedro José Valladares Pérez", "210": "Teófilo Rodríguez Rodríguez", "331": "Jonay Hernández Torres", "324": "Andrés Alejandro López Martín", "354": "José Luis González Martín", "288": "Jorge Marrero Ibáñez", "311": "Pedro Luis León Hernández", "297": "Eduardo Barrera Luna", "366": "Juan Luis Ruiz Ruiz", "276": "Juan Carlos Zamora Parejo", "438": "Antonio Marques Orbe", "273": "Julián Antonio Noda Correa", "435": "Fausto Guillén Iranzo", "290": "Lucas Pérez Suárez", "439": "Pablo Iván Gutiérrez Ferreiro"};
   // Las guardias rotan cada 5 días: el 1-oct-2026 fue Turno 1
   const turnoDeFecha = f => { const d = Math.round((new Date(f + 'T12:00') - new Date('2026-10-01T12:00')) / 864e5); return ((d % 5) + 5) % 5 + 1; };
 
@@ -1175,6 +1200,140 @@
     if (!st.turno.gastos.length) elegir(alta.parque, alta.num);
     guardar(); $('alta').hidden = true; render(); toast(`¡Hola, ${nombre}!`); registrarUsuario(); estadoNotis();
   };
+  // ---------- Cuadrante del día: foto → quién viene ----------
+  // Reconoce a los bomberos por su número (p. ej. 192) o por nombre y apellidos, y propone el cambio.
+  let cuaDetectados = [];
+  function todosLosBomberos() {
+    const m = new Map();
+    Object.entries(NUMEROS).forEach(([num, nom]) => m.set(nom, { nombre: nom, num }));
+    PARQUES.forEach(pq => [1, 2, 3, 4, 5].forEach(n => plantilla(pq, n).forEach(nom => {
+      if (!/^Guardia extra/.test(nom) && !m.has(nom)) m.set(nom, { nombre: nom, num: '' });
+    })));
+    return [...m.values()];
+  }
+  const PALABRAS_VACIAS = new Set(['de', 'del', 'la', 'las', 'los', 'y']);
+  function reconocerCuadrante(texto) {
+    const lineas = texto.split('\n').map(l => normal(l)).filter(l => l.trim());
+    const enLinea = (linea, w) => new RegExp(`(^|[^a-z0-9])${w}([^a-z0-9]|$)`).test(linea);
+    const encontrados = new Map();
+    const bomberos = todosLosBomberos();
+    // 1) Por nombre, en una misma línea: nombre de pila + algún apellido (y casi todas sus palabras),
+    //    o los dos apellidos + la inicial del nombre («SUAREZ MORIN, V.»). Así no se confunden hermanos.
+    const palabras = b => [...new Set(normal(b.nombre).split(/[\s-]+/).filter(w => w.length >= 2 && !PALABRAS_VACIAS.has(w)))];
+    const nombraA = (l, b) => {
+      const pals = palabras(b); if (pals.length < 2) return false;
+      const apellidos = pals.slice(-2), pila = pals.slice(0, Math.max(1, pals.length - 2));
+      const hay = pals.filter(w => enLinea(l, w));
+      if (hay.length >= Math.max(2, pals.length - 1) && hay.some(w => pila.includes(w)) && hay.some(w => apellidos.includes(w))) return true;
+      return apellidos.length === 2 && apellidos.every(w => enLinea(l, w)) && pila.some(w => enLinea(l, w[0] + '\\.?'));
+    };
+    const nombradosEn = lineas.map(l => bomberos.filter(b => nombraA(l, b)));
+    nombradosEn.forEach(lista => lista.forEach(b => encontrados.set(b.nombre, { ...b, por: 'nombre' })));
+    // 2) Por número de bombero, salvo que en esa línea ponga claramente el nombre de otra persona
+    //    (el lector a veces confunde cifras: 331 → 431)
+    bomberos.forEach(b => {
+      if (!b.num || encontrados.has(b.nombre)) return;
+      const conNumero = lineas.map((l, i) => i).filter(i => enLinea(lineas[i], b.num));
+      if (!conNumero.length) return;
+      const apellidos = palabras(b).slice(-2);
+      const valido = conNumero.some(i => !nombradosEn[i].length || apellidos.some(w => enLinea(lineas[i], w)));
+      if (valido) encontrados.set(b.nombre, { ...b, por: 'nº ' + b.num });
+    });
+    return [...encontrados.values()];
+  }
+
+  async function leerCuadrante(file) {
+    const est = $('cuaEstado'); $('cuaResultado').hidden = true; $('hojaCuadrante').hidden = false;
+    est.textContent = '🔍 Leyendo el cuadrante… (la primera vez tarda un poco más)';
+    try {
+      let texto = '';
+      if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) {
+        if (!window.pdfjsLib) {
+          await cargarScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js');
+          pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        }
+        const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+        for (let n = 1; n <= Math.min(pdf.numPages, 3); n++) {
+          const tc = await (await pdf.getPage(n)).getTextContent();
+          const filas = [];
+          tc.items.filter(it => it.str.trim()).forEach(it => {
+            let f = filas.find(f => Math.abs(f.y - it.transform[5]) < 3);
+            if (!f) filas.push(f = { y: it.transform[5], partes: [] });
+            f.partes.push({ x: it.transform[4], t: it.str.trim() });
+          });
+          texto += filas.sort((a, b) => b.y - a.y).map(f => f.partes.sort((a, b) => a.x - b.x).map(p => p.t).join('   ')).join('\n') + '\n';
+        }
+      } else {
+        if (!window.Tesseract) await cargarScript('https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js');
+        const imagen = await prepararImagen(file);
+        const worker = await Tesseract.createWorker('spa', 1, { logger: m => {
+          if (m.status === 'recognizing text') est.textContent = `🔍 Leyendo el cuadrante… ${Math.round(m.progress * 100)}%`;
+        } });
+        await worker.setParameters({ tessedit_pageseg_mode: '6', preserve_interword_spaces: '1' });
+        texto = (await worker.recognize(imagen)).data.text;
+        await worker.terminate();
+      }
+      cuaDetectados = reconocerCuadrante(texto);
+      $('cuaTexto').textContent = texto;
+      mostrarCuadrante();
+    } catch (e) {
+      est.textContent = '⚠️ No se pudo leer el cuadrante. Prueba con otra foto, más cerca y con buena luz.';
+    }
+  }
+
+  function mostrarCuadrante() {
+    const t = st.turno, est = $('cuaEstado');
+    const actuales = [...t.personas, ...(t.traen || [])];
+    if (!cuaDetectados.length) { est.textContent = '⚠️ No he reconocido a nadie. Prueba con una foto más cerca, recta y con buena luz.'; return; }
+    est.textContent = `✅ He reconocido a ${cuaDetectados.length} ${cuaDetectados.length === 1 ? 'persona' : 'personas'} en el cuadrante.`;
+    const fila = (n, marcado, nota) => {
+      const li = document.createElement('li');
+      li.innerHTML = `<label class="check"><input type="checkbox" ${marcado ? 'checked' : ''}> <span>${esc(n)}</span><small>${esc(nota)}</small></label>`;
+      li.querySelector('input').dataset.nombre = n; return li;
+    };
+    const ulV = $('cuaVienen'); ulV.innerHTML = '';
+    cuaDetectados.forEach(b => {
+      const dondeEs = Object.entries(PLANTILLA_INICIAL).find(([, l]) => l.includes(b.nombre));
+      const nota = actuales.includes(b.nombre) ? 'ya estaba' : (dondeEs ? `nuevo · de ${dondeEs[0].replace('-', ' · T')}` : 'nuevo');
+      ulV.appendChild(fila(b.nombre, true, nota));
+    });
+    const noSalen = actuales.filter(n => !cuaDetectados.some(b => b.nombre === n));
+    const ulN = $('cuaNo'); ulN.innerHTML = '';
+    noSalen.forEach(n => ulN.appendChild(fila(n, false, /^Guardia extra/.test(n) ? 'plaza vacante' : 'márcalo si sí viene')));
+    $('cuaNoTit').hidden = !noSalen.length;
+    $('cuaResultado').hidden = false;
+  }
+
+  function aplicarCuadrante() {
+    const t = st.turno;
+    const vienen = [...document.querySelectorAll('#cuaVienen input, #cuaNo input')].filter(i => i.checked).map(i => i.dataset.nombre);
+    if (!vienen.length) return toast('Marca al menos a una persona');
+    const antes = [...t.personas, ...(t.traen || [])];
+    // Los que no vienen dejan su sitio a los nuevos, en orden (así el nuevo ocupa el hueco en la lista)
+    const noVienen = antes.filter(n => !vienen.includes(n));
+    const nuevos = vienen.filter(n => !antes.includes(n));
+    t.cambios = (t.cambios || []).filter(c => !noVienen.includes(c.sustituto) && !vienen.includes(c.quien));
+    noVienen.forEach((n, i) => {
+      const previo = t.cambios.find(c => c.sustituto === n);
+      if (previo) return;
+      t.cambios.push({ id: uid(), quien: n, sustituto: nuevos[i] || '' });
+    });
+    t.traen = (t.traen || []).filter(n => vienen.includes(n));
+    t.personas = vienen.filter(n => !t.traen.includes(n));
+    reparto = new Set(t.personas);
+    t.pagados = {}; t.avisados = {};
+    guardar(); render(); $('hojaCuadrante').hidden = true;
+    toast(`Turno actualizado: ${t.personas.length} en la borracha` + (nuevos.length ? ` · ${nuevos.length} ${nuevos.length === 1 ? 'nuevo' : 'nuevos'}` : ''));
+  }
+
+  $('btnCuadrante').onclick = () => $('inCuadrante').click();
+  $('cuaOtro').onclick = () => $('inCuadranteArchivo').click();
+  const alElegirCuadrante = e => { const f = e.target.files[0]; e.target.value = ''; if (f) leerCuadrante(f); };
+  $('inCuadrante').onchange = alElegirCuadrante;
+  $('inCuadranteArchivo').onchange = alElegirCuadrante;
+  $('cuaAplicar').onclick = aplicarCuadrante;
+  $('cuaCancelar').onclick = () => { $('hojaCuadrante').hidden = true; };
+
   // ---------- Sustituciones: alguien no viene y otra persona ocupa su sitio ----------
   function abrirCambio(quien) {
     const t = st.turno;
