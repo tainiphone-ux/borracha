@@ -281,7 +281,7 @@
       <div class="resumen">
         <div><b id="rTotal">0</b><span>Total</span></div>
         <div><b id="rPersonas">0</b><span>Personas</span></div>
-        <div><b id="rMedia">0</b><span>Media</span></div>
+        <div><b id="rMedia">0</b><span id="rMediaTit">Tu parte</span></div>
       </div>
     </div>
     <div class="card">
@@ -663,7 +663,16 @@
     $('hdrTotal').textContent = fmt(r.total);
     $('rTotal').textContent = fmt(r.total);
     $('rPersonas').textContent = t.personas.length;
-    $('rMedia').textContent = t.personas.length ? fmt(Math.round(r.total / t.personas.length)) : fmt(0);
+    // Lo que le toca a quien usa el móvil (según sus comidas); si no come hoy, lo de una comida completa
+    const yoNom = st.yo && st.yo.nombre;
+    if (yoNom && t.personas.includes(yoNom)) {
+      $('rMediaTit').textContent = 'Tu parte' + (comidasDe(t, yoNom).length === 1 ? (comidasDe(t, yoNom)[0] === 'A' ? ' (☀️)' : ' (🌙)') : '');
+      $('rMedia').textContent = fmt(r.consumo[yoNom] || 0);
+    } else {
+      const completo = t.personas.find(n => comidasDe(t, n).length === 2);
+      $('rMediaTit').textContent = 'Almuerzo y cena';
+      $('rMedia').textContent = fmt(completo ? (r.consumo[completo] || 0) : 0);
+    }
 
     const lpag = $('listaPagos'); lpag.innerHTML = '';
     if (!r.pagos.length) lpag.innerHTML = `<p class="vacio">${r.total ? '¡Todo cuadra! Nadie debe nada.' : 'Añade gastos para ver las cuentas.'}</p>`;
