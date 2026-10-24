@@ -815,6 +815,34 @@
   });
 
   // Saca productos y total de las líneas del ticket: "2 PAN BARRA 0,45 0,90" → PAN BARRA 0,90
+  // ---------- Lectura con IA (Claude Haiku 5.5 en la función «leerImagen» del servidor) ----------
+  // Devuelve los datos ya ordenados, o null si no hay conexión o falla (entonces se usa el lector del móvil).
+  async function leerConIA(tipo, file) {
+    if (!db || !navigator.onLine) return null;
+    try {
+      if (!firebase.functions) await cargarScript('https://www.gstatic.com/firebasejs/10.12.2/firebase-functions-compat.js');
+      // Foto reducida a 1568 px como máximo (lo que aprovecha la IA) para que suba rápido
+      const datos = await new Promise((res, rej) => {
+        const url = URL.createObjectURL(file), img = new Image();
+        img.onload = () => {
+          const k = Math.min(1, 1568 / Math.max(img.width, img.height));
+          const c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+          c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+          res(c.toDataURL('image/jpeg', 0.85).split(',')[1]);
+        };
+        img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('imagen')); };
+        img.src = url;
+      });
+      const llamar = firebase.app().functions('europe-west1').httpsCallable('leerImagen', { timeout: 60000 });
+      const r = await llamar({ tipo, imagen: datos, mediaType: 'image/jpeg' });
+      return r.data && r.data.ok ? r.data.datos : null;
+    } catch (e) {
+      console.log('Lectura con IA no disponible:', e && (e.message || e.code));
+      if (e && e.code === 'functions/resource-exhausted') toast(e.message);
+      return null;
+    }
+  }
+
   // Corrige confusiones típicas del lector dentro de los números (O→0, l→1, S→5, "1, 23"→"1,23")
   const arreglarNumeros = l => l
     .replace(/(\d)\s*([.,])\s+(\d{2})\b/g, '$1$2$3')
@@ -876,6 +904,17 @@
   let ocrTexto = '';  // texto leído de la última factura (se guarda con el gasto para poder revisarlo)
   async function leerFactura(file) {
     const est = $('ocrEstado'); est.hidden = false;
+    // 1) Con IA (Claude Haiku 5.5, a través de la función del servidor)
+    est.textContent = '🤖 Leyendo el ticket con IA…';
+    const ia = await leerConIA('ticket', file);
+    if (ia && ia.productos) {
+      const productos = ia.productos.filter(x => x.nombre && isFinite(x.precio))
+        .map(x => ({ n: x.nombre.charAt(0).toUpperCase() + x.nombre.slice(1).toLowerCase(), c: Math.round(x.precio * 100) }));
+      const total = isFinite(ia.total) && ia.total ? Math.round(ia.total * 100) : null;
+      const texto = (ia.comercio ? ia.comercio + '\n' : '') + productos.map(x => `${x.n}  ${fmt(x.c)}`).join('\n') + (total ? `\nTOTAL ${fmt(total)}` : '');
+      return aplicarLectura(texto, { productos, total });
+    }
+    // 2) Sin conexión o si la IA falla: el lector de siempre, dentro del móvil
     est.textContent = '🔍 Leyendo productos y precios… (la primera vez tarda un poco más)';
     try {
       if (!window.Tesseract) await cargarScript('https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js');
@@ -894,17 +933,17 @@
   }
 
   // Rellena productos, importe y estado a partir del texto del ticket (de una foto o de un PDF)
-  function aplicarLectura(texto) {
+  function aplicarLectura(texto, datosIA) {
     const est = $('ocrEstado'); est.hidden = false;
     {
       ocrTexto = texto.slice(0, 5000);
-      const { productos, total } = parsearTicket(texto);
+      const { productos, total } = datosIA || parsearTicket(texto);
       productosForm = productos;
       const suma = productos.reduce((a, x) => a + x.c, 0);
       if (!$('gImporte').value && (total || suma)) $('gImporte').value = ((total || suma) / 100).toFixed(2).replace('.', ',');
       renderProductos();
       est.innerHTML = (productos.length
-        ? `✅ ${productos.length} productos leídos${total ? ' · total del ticket ' + fmt(total) : ''}. Revisa la lista y elige quién pagó.`
+        ? `✅ ${productos.length} productos leídos${datosIA ? ' con IA' : ''}${total ? ' · total del ticket ' + fmt(total) : ''}. Revisa la lista y elige quién pagó.`
         : '⚠️ No se han podido leer productos. Pon el importe a mano o añade productos con «+ Producto».')
         + `<details style="margin-top:6px"><summary>Ver el texto leído</summary><pre style="white-space:pre-wrap;font-size:12px;margin:6px 0 0">${esc(ocrTexto)}</pre></details>`;
       if (!productos.length) { $('productosZona').hidden = false; }
@@ -1250,9 +1289,9 @@
 
   async function leerCuadrante(file) {
     const est = $('cuaEstado'); $('cuaResultado').hidden = true; $('hojaCuadrante').hidden = false;
-    est.textContent = '🔍 Leyendo el cuadrante… (la primera vez tarda un poco más)';
+    est.textContent = '🔍 Leyendo el cuadrante…';
     try {
-      let texto = '';
+      let texto = '', ia = null;
       if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) {
         if (!window.pdfjsLib) {
           await cargarScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js');
@@ -1269,7 +1308,11 @@
           });
           texto += filas.sort((a, b) => b.y - a.y).map(f => f.partes.sort((a, b) => a.x - b.x).map(p => p.t).join('   ')).join('\n') + '\n';
         }
+      } else if ((est.textContent = '🤖 Leyendo el cuadrante con IA…') && (ia = await leerConIA('cuadrante', file)) && ia.personas) {
+        // La IA devuelve número y nombre de cada persona; luego se busca en el listado igual que antes
+        texto = ia.personas.map(p => `${p.numero || ''} ${p.nombre}`.trim()).join('\n');
       } else {
+        est.textContent = '🔍 Leyendo el cuadrante… (la primera vez tarda un poco más)';
         if (!window.Tesseract) await cargarScript('https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js');
         const imagen = await prepararImagen(file);
         const worker = await Tesseract.createWorker('spa', 1, { logger: m => {
