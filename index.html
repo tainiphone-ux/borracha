@@ -123,6 +123,7 @@
   .explicacion ul { margin: 0 0 8px; padding-left: 18px; }
   .explicacion .tuya { background: var(--bg); border-radius: 10px; padding: 8px 10px; margin-top: 8px; }
   .explicacion small { color: var(--sub); }
+  .pago-acc[hidden] { display: none; }
   .lista { list-style: none; margin: 0; padding: 0; }
   .lista li { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--borde); }
   .lista li:last-child { border-bottom: 0; }
@@ -736,9 +737,13 @@
       const acc = document.createElement('div'); acc.className = 'pago-acc';
       const yo = st.yo && st.yo.nombre;
       const boton = (txt, primario, fn) => { const b = document.createElement('button'); b.className = primario ? 'btn' : 'btn-sec'; b.textContent = txt; b.onclick = fn; acc.appendChild(b); };
-      if (e === 'pendiente') boton(yo === p.de ? '💸 Ya he pagado' : 'Marcar pagado', yo === p.de, () => marcarPagado(t, p));
-      if (e === 'pagado') boton(yo === p.a ? '✅ Confirmar recibido' : 'Confirmar recibido', yo === p.a, () => confirmarPago(t, p));
-      if (e !== 'pendiente') { const u = document.createElement('button'); u.className = 'btn-ghost'; u.textContent = '↩️ Deshacer'; u.onclick = () => deshacerPago(t, p); acc.appendChild(u); }
+      // Botones solo para los implicados: quien paga avisa de que ha pagado;
+      // quien cobra puede marcar cualquier pago como cobrado (también de quien no tiene la app).
+      if (yo === p.de && e === 'pendiente') boton('💸 Ya he pagado', true, () => marcarPagado(t, p));
+      if (yo === p.a && e === 'pendiente') boton('✅ Marcar cobrado', false, () => marcarCobrado(t, p));
+      if (yo === p.a && e === 'pagado') boton('✅ Confirmar recibido', true, () => confirmarPago(t, p));
+      if ((yo === p.de && e === 'pagado') || (yo === p.a && e !== 'pendiente')) { const u = document.createElement('button'); u.className = 'btn-ghost'; u.textContent = '↩️ Deshacer'; u.onclick = () => deshacerPago(t, p); acc.appendChild(u); }
+      if (!acc.children.length) acc.hidden = true;
       d.appendChild(acc); lpag.appendChild(d);
     });
 
@@ -1156,6 +1161,12 @@
     if (tieneApp(p.de)) return toast(`Confirmado. ${saludo(p.de)} lo verá en su app`);
     abrirWa(p.de, `Hola ${saludo(p.de)} 👋\n✅ Confirmado: he recibido tus ${fmt(p.c)} de la comida del turno ${etiqueta(t)} – ${fechaTxt(t.fecha)}. ¡Gracias!\n— ${p.a}`);
     toast('Pago confirmado');
+  }
+  // Quien cobra lo marca directamente como cobrado (p. ej. le han pagado en mano y el otro no tiene la app)
+  function marcarCobrado(t, p) {
+    const k = `${p.de}>${p.a}`, ahora = new Date().toISOString();
+    t.pagados[k] = { pagado: ahora, confirmado: ahora, c: p.c }; guardar(); render();
+    toast(`Cobrado: ${saludo(p.de)} · ${fmt(p.c)}`);
   }
   function deshacerPago(t, p) {
     const k = `${p.de}>${p.a}`, v = t.pagados[k];
