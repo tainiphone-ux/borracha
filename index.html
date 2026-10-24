@@ -118,6 +118,11 @@
   .cua-lista li { padding: 8px 0; }
   .cua-lista label.check { margin: 0; flex: 1; }
   .cua-lista small { color: var(--sub); font-size: 12px; margin-left: 4px; }
+  .explicacion { margin-top: 12px; font-size: 15px; line-height: 1.5; }
+  .explicacion p { margin: 0 0 6px; }
+  .explicacion ul { margin: 0 0 8px; padding-left: 18px; }
+  .explicacion .tuya { background: var(--bg); border-radius: 10px; padding: 8px 10px; margin-top: 8px; }
+  .explicacion small { color: var(--sub); }
   .lista { list-style: none; margin: 0; padding: 0; }
   .lista li { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--borde); }
   .lista li:last-child { border-bottom: 0; }
@@ -278,11 +283,11 @@
   <!-- CUENTAS -->
   <section id="s-cuentas">
     <div class="card">
-      <div class="resumen">
+      <div class="resumen" style="grid-template-columns:1fr 1fr">
         <div><b id="rTotal">0</b><span>Total</span></div>
-        <div><b id="rPersonas">0</b><span>Personas</span></div>
-        <div><b id="rMedia">0</b><span id="rMediaTit">Tu parte</span></div>
+        <div><b id="rPersonas">0</b><span>En la borracha</span></div>
       </div>
+      <div class="explicacion" id="explicacion"></div>
     </div>
     <div class="card">
       <h2>Quién paga a quién</h2>
@@ -550,6 +555,48 @@
     b.className = 'chip' + (on ? ' on' : ''); b.textContent = nombre; b.onclick = onClick; return b;
   }
 
+  const NOMBRE_COMIDAS = { 'A,C': 'Almuerzo y cena', 'A': 'Solo almuerzo', 'C': 'Solo cena' };
+  function explicarReparto(t, r) {
+    if (!r.total) return '<p class="vacio" style="padding:0">Cuando haya gastos, aquí verás lo que le toca a cada uno.</p>';
+    const clave = n => [...comidasDe(t, n)].sort().join(',');
+    // Quien más ha pagado absorbe los céntimos sueltos: no se usa para calcular el importe del grupo
+    const quienCobra = [...t.personas].sort((x, y) => (r.pagado[y] || 0) - (r.pagado[x] || 0))[0];
+    const grupos = {};
+    t.personas.forEach(n => { (grupos[clave(n)] ||= []).push(n); });
+    const importeGrupo = lista => {
+      const vals = lista.filter(n => n !== quienCobra || lista.length === 1).map(n => r.consumo[n] || 0);
+      const cuenta = {}; vals.forEach(v => { cuenta[v] = (cuenta[v] || 0) + 1; });
+      return +Object.entries(cuenta).sort((a, b) => b[1] - a[1])[0][0];
+    };
+    let h = '';
+    // Si todos los gastos son para las dos comidas y entre todos, se explica con raciones
+    const simple = t.gastos.every(g => comidasGasto(g).length === 2 && t.personas.every(n => g.entre.includes(n)));
+    if (simple) {
+      const raciones = t.personas.reduce((a, n) => a + comidasDe(t, n).length, 0);
+      h += `<p>🍽️ <b>${fmt(r.total)}</b> entre <b>${raciones} raciones</b> <small>(cada comida cuenta una ración)</small> = <b>${fmt(Math.round(r.total / raciones))}</b> la ración.</p>`;
+    } else {
+      h += `<p>🍽️ <b>${fmt(r.total)}</b>. Cada gasto se reparte entre quienes hacen esa comida (almuerzo y/o cena).</p>`;
+    }
+    h += '<ul>' + ['A,C', 'A', 'C'].filter(k => grupos[k]).map(k =>
+      `<li>${NOMBRE_COMIDAS[k]} (${grupos[k].length}): <b>${fmt(importeGrupo(grupos[k]))}</b>${grupos[k].length > 1 ? ' cada uno' : ''}</li>`).join('') + '</ul>';
+    const nTraen = (t.traen || []).length;
+    if (nTraen) h += `<p><small>🥪 ${nTraen} ${nTraen === 1 ? 'trae' : 'traen'} su comida y no ${nTraen === 1 ? 'paga' : 'pagan'}.</small></p>`;
+    const descuadre = t.personas.some(n => n !== quienCobra && (r.consumo[n] || 0) !== importeGrupo(grupos[clave(n)]))
+      || (r.consumo[quienCobra] || 0) !== importeGrupo(grupos[clave(quienCobra)]);
+    if (descuadre && r.pagado[quienCobra]) h += `<p><small>Los céntimos que no se pueden repartir exactos los asume quien cobra (${esc(saludo(quienCobra))}).</small></p>`;
+    const yo = st.yo && st.yo.nombre;
+    if (yo && t.personas.includes(yo)) {
+      const k = clave(yo), porque = k === 'A,C' ? 'hoy almuerzas y cenas' : k === 'A' ? 'hoy solo almuerzas' : 'hoy solo cenas';
+      const puse = r.pagado[yo] || 0, saldo = r.bal[yo] || 0;
+      h += `<div class="tuya">👉 A ti te tocan <b>${fmt(r.consumo[yo] || 0)}</b> porque ${porque}.`
+        + (puse ? ` Pusiste ${fmt(puse)}, así que ${saldo >= 0 ? `te tienen que dar <b>${fmt(saldo)}</b>` : `te falta pagar <b>${fmt(-saldo)}</b>`}.` : '')
+        + '</div>';
+    } else if (yo && (t.traen || []).includes(yo)) {
+      h += '<div class="tuya">👉 Hoy traes tu comida: no te toca pagar nada.</div>';
+    }
+    return h;
+  }
+
   function render() {
     const t = st.turno;
     $('fecha').value = t.fecha; $('moneda').value = st.moneda;
@@ -671,16 +718,8 @@
     $('hdrTotal').textContent = fmt(r.total);
     $('rTotal').textContent = fmt(r.total);
     $('rPersonas').textContent = t.personas.length;
-    // Lo que le toca a quien usa el móvil (según sus comidas); si no come hoy, lo de una comida completa
-    const yoNom = st.yo && st.yo.nombre;
-    if (yoNom && t.personas.includes(yoNom)) {
-      $('rMediaTit').textContent = 'Tu parte' + (comidasDe(t, yoNom).length === 1 ? (comidasDe(t, yoNom)[0] === 'A' ? ' (☀️)' : ' (🌙)') : '');
-      $('rMedia').textContent = fmt(r.consumo[yoNom] || 0);
-    } else {
-      const completo = t.personas.find(n => comidasDe(t, n).length === 2);
-      $('rMediaTit').textContent = 'Almuerzo y cena';
-      $('rMedia').textContent = fmt(completo ? (r.consumo[completo] || 0) : 0);
-    }
+    // Explicación de lo que le toca a cada uno y por qué
+    $('explicacion').innerHTML = explicarReparto(t, r);
 
     const lpag = $('listaPagos'); lpag.innerHTML = '';
     if (!r.pagos.length) lpag.innerHTML = `<p class="vacio">${r.total ? '¡Todo cuadra! Nadie debe nada.' : 'Añade gastos para ver las cuentas.'}</p>`;
