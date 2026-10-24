@@ -505,20 +505,28 @@
     t.gastos.forEach(g => { todos.add(g.pagador); g.entre.forEach(p => todos.add(p)); });
     todos.forEach(p => { bal[p] = 0; pagado[p] = 0; consumo[p] = 0; });
     let total = 0;
+    const exacto = {};  // parte exacta de cada uno (con decimales de céntimo), se redondea al final
+    todos.forEach(p => { exacto[p] = 0; });
     t.gastos.forEach(g => {
       total += g.importe;
-      pagado[g.pagador] += g.importe; bal[g.pagador] += g.importe;
+      pagado[g.pagador] += g.importe;
       if (!g.entre.length) return;
       // Cada persona pesa tantas partes como comidas del gasto a las que va (almuerzo y/o cena)
       const cg = comidasGasto(g);
       let pesos = g.entre.map(p => comidasDe(t, p).filter(c => cg.includes(c)).length);
       if (!pesos.some(Boolean)) pesos = g.entre.map(() => 1);
       const W = pesos.reduce((a, b) => a + b, 0);
-      const partes = pesos.map(w => Math.floor(g.importe * w / W));
-      let resto = g.importe - partes.reduce((a, b) => a + b, 0);
-      for (let k = 0; resto > 0; k = (k + 1) % partes.length) if (pesos[k]) { partes[k]++; resto--; }
-      g.entre.forEach((p, k) => { consumo[p] += partes[k]; bal[p] -= partes[k]; });
+      g.entre.forEach((p, k) => { exacto[p] += g.importe * pesos[k] / W; });
     });
+    // Se redondea una sola vez por persona; los céntimos que sobren o falten los absorbe
+    // quien más ha pagado (el que cobra), para que todos los que comen lo mismo paguen lo mismo.
+    todos.forEach(p => { consumo[p] = Math.round(exacto[p]); });
+    const repartido = Object.values(consumo).reduce((a, b) => a + b, 0);
+    if (repartido !== total && t.gastos.length) {
+      const quienCobra = [...todos].sort((x, y) => pagado[y] - pagado[x])[0];
+      consumo[quienCobra] += total - repartido;
+    }
+    todos.forEach(p => { bal[p] = pagado[p] - consumo[p]; });
     // Liquidación mínima (greedy)
     const deu = [], acr = [];
     Object.entries(bal).forEach(([p, b]) => { if (b < 0) deu.push([p, -b]); else if (b > 0) acr.push([p, b]); });
