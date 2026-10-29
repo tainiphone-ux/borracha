@@ -124,6 +124,9 @@
   .explicacion .tuya { background: var(--bg); border-radius: 10px; padding: 8px 10px; margin-top: 8px; }
   .explicacion small { color: var(--sub); }
   .pago-acc[hidden] { display: none; }
+  .prods-edit li { flex-wrap: wrap; }
+  .prods-edit .p-para { flex: 1 0 100%; padding: 6px 8px; font-size: 13px; border-radius: 8px; color: var(--sub); }
+  .prods-edit .p-para.suyo { color: var(--rojo); border-color: var(--rojo); font-weight: 600; }
   .lista { list-style: none; margin: 0; padding: 0; }
   .lista li { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--borde); }
   .lista li:last-child { border-bottom: 0; }
@@ -508,21 +511,27 @@
   function calcular(t) {
     const bal = {}; const pagado = {}; const consumo = {};
     const todos = new Set(t.personas);
-    t.gastos.forEach(g => { todos.add(g.pagador); g.entre.forEach(p => todos.add(p)); });
+    const personalesDe = g => (g.productos || []).filter(x => x.para && x.c);
+    t.gastos.forEach(g => { todos.add(g.pagador); g.entre.forEach(p => todos.add(p)); personalesDe(g).forEach(x => todos.add(x.para)); });
     todos.forEach(p => { bal[p] = 0; pagado[p] = 0; consumo[p] = 0; });
+    const personal = {}, personalItems = {};  // productos asignados a una sola persona (los paga enteros)
+    todos.forEach(p => { personal[p] = 0; personalItems[p] = []; });
     let total = 0;
     const exacto = {};  // parte exacta de cada uno (con decimales de céntimo), se redondea al final
     todos.forEach(p => { exacto[p] = 0; });
     t.gastos.forEach(g => {
       total += g.importe;
       pagado[g.pagador] += g.importe;
+      // Los productos personales los paga entero su dueño; el resto del gasto es común
+      let comunGasto = g.importe;
+      personalesDe(g).forEach(x => { exacto[x.para] += x.c; personal[x.para] += x.c; personalItems[x.para].push(x); comunGasto -= x.c; });
       if (!g.entre.length) return;
       // Cada persona pesa tantas partes como comidas del gasto a las que va (almuerzo y/o cena)
       const cg = comidasGasto(g);
       let pesos = g.entre.map(p => comidasDe(t, p).filter(c => cg.includes(c)).length);
       if (!pesos.some(Boolean)) pesos = g.entre.map(() => 1);
       const W = pesos.reduce((a, b) => a + b, 0);
-      g.entre.forEach((p, k) => { exacto[p] += g.importe * pesos[k] / W; });
+      g.entre.forEach((p, k) => { exacto[p] += comunGasto * pesos[k] / W; });
     });
     // Se redondea una sola vez por persona; los céntimos que sobren o falten los absorbe
     // quien más ha pagado (el que cobra), para que todos los que comen lo mismo paguen lo mismo.
@@ -544,7 +553,9 @@
       deu[i][1] -= m; acr[j][1] -= m;
       if (!deu[i][1]) i++; if (!acr[j][1]) j++;
     }
-    return { bal, pagado, consumo, total, pagos, personas: [...todos] };
+    const comun = {}; todos.forEach(p => { comun[p] = consumo[p] - personal[p]; });
+    const totalPersonal = Object.values(personal).reduce((a, b) => a + b, 0);
+    return { bal, pagado, consumo, comun, personal, personalItems, totalPersonal, total, pagos, personas: [...todos] };
   }
 
   // ---------- Render ----------
@@ -565,7 +576,7 @@
     const grupos = {};
     t.personas.forEach(n => { (grupos[clave(n)] ||= []).push(n); });
     const importeGrupo = lista => {
-      const vals = lista.filter(n => n !== quienCobra || lista.length === 1).map(n => r.consumo[n] || 0);
+      const vals = lista.filter(n => n !== quienCobra || lista.length === 1).map(n => r.comun[n] || 0);
       const cuenta = {}; vals.forEach(v => { cuenta[v] = (cuenta[v] || 0) + 1; });
       return +Object.entries(cuenta).sort((a, b) => b[1] - a[1])[0][0];
     };
@@ -574,22 +585,28 @@
     const simple = t.gastos.every(g => comidasGasto(g).length === 2 && t.personas.every(n => g.entre.includes(n)));
     if (simple) {
       const raciones = t.personas.reduce((a, n) => a + comidasDe(t, n).length, 0);
-      h += `<p>🍽️ <b>${fmt(r.total)}</b> entre <b>${raciones} raciones</b> <small>(cada comida cuenta una ración)</small> = <b>${fmt(Math.round(r.total / raciones))}</b> la ración.</p>`;
+      const comunTotal = r.total - r.totalPersonal;
+      h += `<p>🍽️ <b>${fmt(comunTotal)}</b>${r.totalPersonal ? ' comunes' : ''} entre <b>${raciones} raciones</b> <small>(cada comida cuenta una ración)</small> = <b>${fmt(Math.round(comunTotal / raciones))}</b> la ración.</p>`;
     } else {
-      h += `<p>🍽️ <b>${fmt(r.total)}</b>. Cada gasto se reparte entre quienes hacen esa comida (almuerzo y/o cena).</p>`;
+      h += `<p>🍽️ <b>${fmt(r.total - r.totalPersonal)}</b>${r.totalPersonal ? ' comunes' : ''}. Cada gasto se reparte entre quienes hacen esa comida (almuerzo y/o cena).</p>`;
     }
     h += '<ul>' + ['A,C', 'A', 'C'].filter(k => grupos[k]).map(k =>
       `<li>${NOMBRE_COMIDAS[k]} (${grupos[k].length}): <b>${fmt(importeGrupo(grupos[k]))}</b>${grupos[k].length > 1 ? ' cada uno' : ''}</li>`).join('') + '</ul>';
+    // Productos personales: cada uno paga entero lo suyo, además de su parte común
+    const conPersonal = r.personas.filter(n => r.personal[n]);
+    if (conPersonal.length) h += `<p>🧍 <b>${fmt(r.totalPersonal)}</b> en gastos personales, que paga cada uno entero:</p><ul>`
+      + conPersonal.map(n => `<li>${esc(n)}: <b>${fmt(r.personal[n])}</b> <small>(${r.personalItems[n].map(x => esc(x.n)).join(', ')})</small></li>`).join('') + '</ul>';
     const nTraen = (t.traen || []).length;
     if (nTraen) h += `<p><small>🥪 ${nTraen} ${nTraen === 1 ? 'trae' : 'traen'} su comida y no ${nTraen === 1 ? 'paga' : 'pagan'}.</small></p>`;
-    const descuadre = t.personas.some(n => n !== quienCobra && (r.consumo[n] || 0) !== importeGrupo(grupos[clave(n)]))
-      || (r.consumo[quienCobra] || 0) !== importeGrupo(grupos[clave(quienCobra)]);
+    const descuadre = t.personas.some(n => n !== quienCobra && (r.comun[n] || 0) !== importeGrupo(grupos[clave(n)]))
+      || (r.comun[quienCobra] || 0) !== importeGrupo(grupos[clave(quienCobra)]);
     if (descuadre && r.pagado[quienCobra]) h += `<p><small>Los céntimos que no se pueden repartir exactos los asume quien cobra (${esc(saludo(quienCobra))}).</small></p>`;
     const yo = st.yo && st.yo.nombre;
     if (yo && t.personas.includes(yo)) {
       const k = clave(yo), porque = k === 'A,C' ? 'hoy almuerzas y cenas' : k === 'A' ? 'hoy solo almuerzas' : 'hoy solo cenas';
       const puse = r.pagado[yo] || 0, saldo = r.bal[yo] || 0;
-      h += `<div class="tuya">👉 A ti te tocan <b>${fmt(r.consumo[yo] || 0)}</b> porque ${porque}.`
+      h += `<div class="tuya">👉 A ti te tocan <b>${fmt(r.consumo[yo] || 0)}</b>`
+        + (r.personal[yo] ? `: <b>${fmt(r.comun[yo] || 0)}</b> de la parte común (${porque}) + <b>${fmt(r.personal[yo])}</b> de lo tuyo (${r.personalItems[yo].map(x => esc(x.n)).join(', ')}).` : ` porque ${porque}.`)
         + (puse ? ` Pusiste ${fmt(puse)}, así que ${saldo >= 0 ? `te tienen que dar <b>${fmt(saldo)}</b>` : `te falta pagar <b>${fmt(-saldo)}</b>`}.` : '')
         + '</div>';
     } else if (yo && (t.traen || []).includes(yo)) {
@@ -702,7 +719,7 @@
     t.gastos.forEach(g => {
       const li = document.createElement('li');
       const entre = g.entre.length === t.personas.length && g.entre.every(p => t.personas.includes(p)) ? 'todos' : g.entre.join(', ');
-      li.innerHTML = `<div class="info">${esc(g.concepto || 'Gasto')}<small>${txtComidas(comidasGasto(g))[0].toUpperCase() + txtComidas(comidasGasto(g)).slice(1)} · pagó <b>${esc(g.pagador)}</b> · entre ${esc(entre)}</small>${g.productos && g.productos.length ? `<details class="prods"><summary>Ver ${g.productos.length} productos</summary>${g.productos.map(x => `<div><span>${esc(x.n)}</span><span>${fmt(x.c)}</span></div>`).join('')}</details>` : ''}</div><span class="monto">${fmt(g.importe)}</span>`;
+      li.innerHTML = `<div class="info">${esc(g.concepto || 'Gasto')}<small>${txtComidas(comidasGasto(g))[0].toUpperCase() + txtComidas(comidasGasto(g)).slice(1)} · pagó <b>${esc(g.pagador)}</b> · entre ${esc(entre)}</small>${g.productos && g.productos.length ? `<details class="prods"><summary>Ver ${g.productos.length} productos</summary>${g.productos.map(x => `<div><span>${esc(x.n)}${x.para ? ` <b>· 👤 ${esc(saludo(x.para))}</b>` : ''}</span><span>${fmt(x.c)}</span></div>`).join('')}</details>` : ''}</div><span class="monto">${fmt(g.importe)}</span>`;
       if (g.foto) {
         const im = document.createElement('img'); im.className = 'miniatura'; im.alt = 'Factura';
         fotoCargar(g.id).then(d => { if (d) im.src = d; }).catch(() => {});
@@ -782,7 +799,7 @@
     r.personas.forEach(p => {
       const b = r.bal[p];
       const li = document.createElement('li');
-      li.innerHTML = `<div class="info">${esc(p)}<small>Puso ${fmt(r.pagado[p])} · le toca ${fmt(r.consumo[p])}</small></div>
+      li.innerHTML = `<div class="info">${esc(p)}<small>Puso ${fmt(r.pagado[p])} · le toca ${fmt(r.consumo[p])}${r.personal[p] ? ` (común ${fmt(r.comun[p])} + personal ${fmt(r.personal[p])})` : ''}</small></div>
         <span class="monto ${b > 0 ? 'pos' : b < 0 ? 'neg' : ''}">${b > 0 ? '+' : ''}${fmt(b)}</span>`;
       lb.appendChild(li);
     });
@@ -1062,7 +1079,13 @@
       c.onchange = () => { const v = parse(c.value); x.c = isFinite(v) ? v : 0; renderProductos(); };
       const del = document.createElement('button'); del.className = 'btn-ghost'; del.textContent = '✕';
       del.onclick = () => { productosForm.splice(i, 1); renderProductos(); };
-      li.append(n, c, del); ul.appendChild(li);
+      // ¿Para quién es este producto? Por defecto, para todos (gasto común)
+      const para = document.createElement('select'); para.className = 'p-para' + (x.para ? ' suyo' : '');
+      para.innerHTML = '<option value="">👥 Todos (común)</option>' + [...st.turno.personas, ...(st.turno.traen || [])]
+        .map(nom => `<option value="${esc(nom)}">👤 Solo ${esc(nom)}</option>`).join('');
+      para.value = x.para || '';
+      para.onchange = () => { x.para = para.value || undefined; renderProductos(); };
+      li.append(n, c, del, para); ul.appendChild(li);
     });
     const suma = productosForm.reduce((a, x) => a + (x.c || 0), 0), imp = parse($('gImporte').value);
     $('sumaProd').textContent = productosForm.length
@@ -1101,7 +1124,7 @@
     const previo = editando && t.gastos.find(x => x.id === editando);
     const g = { id: editando || uid(), creado: (previo && previo.creado) || Date.now(), por: st.yo ? st.yo.nombre : '', concepto: $('gConcepto').value.trim(), importe, pagador: $('gPagador').value, entre: [...reparto], comidas: [...comidasForm].sort(), foto: !!fotoForm,
       ocr: fotoForm ? (ocrTexto || (previo && previo.ocr) || '') : '',
-      productos: productosForm.filter(x => x.n.trim() || x.c).map(x => ({ n: x.n.trim() || 'Producto', c: x.c || 0 })) };
+      productos: productosForm.filter(x => x.n.trim() || x.c).map(x => ({ n: x.n.trim() || 'Producto', c: x.c || 0, ...(x.para ? { para: x.para } : {}) })) };
     if (fotoForm) { fotoSet(g.id, fotoForm).catch(() => toast('No se pudo guardar la foto')); subirFoto(g.id, fotoForm); }
     else { fotoDel(g.id).catch(() => {}); if (previo && previo.foto) borrarFotoNube(g.id); }
     if (editando) t.gastos = t.gastos.map(x => x.id === editando ? g : x); else t.gastos.push(g);
@@ -1128,7 +1151,9 @@
   function textoPersona(t, p) {
     const r = calcular(t), b = r.bal[p] || 0;
     let s = `Hola ${saludo(p)} 👋\n🚒 Borracha – comida del turno ${etiqueta(t)} – ${fechaTxt(t.fecha)}\n\n`;
-    s += `Te tocaba ${fmt(r.consumo[p] || 0)} (${txtComidas(comidasDe(t, p))}) y pusiste ${fmt(r.pagado[p] || 0)}.\n\n`;
+    s += `Te tocaba ${fmt(r.consumo[p] || 0)}` + (r.personal[p]
+      ? `: ${fmt(r.comun[p] || 0)} de la parte común (${txtComidas(comidasDe(t, p))}) + ${fmt(r.personal[p])} de lo tuyo (${r.personalItems[p].map(x => x.n).join(', ')})`
+      : ` (${txtComidas(comidasDe(t, p))})`) + `, y pusiste ${fmt(r.pagado[p] || 0)}.\n\n`;
     const debe = r.pagos.filter(x => x.de === p), cobra = r.pagos.filter(x => x.a === p);
     if (debe.length) s += `💸 Tienes que pagar ${fmt(-b)}:\n` + debe.map(x => `• ${fmt(x.c)} a ${x.a}\n`).join('');
     if (cobra.length) s += `💰 Te tienen que dar ${fmt(b)}:\n` + cobra.map(x => `• ${x.de} te da ${fmt(x.c)}\n`).join('');
