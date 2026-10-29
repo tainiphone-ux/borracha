@@ -300,7 +300,8 @@
     </div>
     <div class="card">
       <h2>Avisar a cada uno</h2>
-      <p class="ayuda" style="margin:0 0 6px">Envía a cada persona lo que tiene que pagar o lo que le deben. Se abre WhatsApp con el mensaje ya escrito.</p>
+      <p class="ayuda" style="margin:0 0 6px">Envía a cada persona lo que tiene que pagar o lo que le deben. A quien tiene la app le llega al móvil; a los demás, por WhatsApp.</p>
+      <button class="btn btn-full" id="btnAvisarTodos" style="margin:0 0 8px">📣 Avisar a todos los que tienen la app</button>
       <ul class="lista" id="listaAvisos"></ul>
     </div>
     <div class="card">
@@ -773,7 +774,9 @@
       li.innerHTML = `<div class="info">${esc(p)} ${tieneApp(p) ? '<span class="tag-app">📱 app</span>' : ''}<small>${b < 0 ? 'Paga ' + fmt(-b) : b > 0 ? 'Recibe ' + fmt(b) : 'En paz'}${tel ? ' · 📱 ' + esc(tel) : ''}${t.avisados && t.avisados[p] ? ' · <span class="avisado">✓ avisado</span>' : ''}</small></div>`;
       const bt = document.createElement('button'); bt.className = 'btn-ghost'; bt.textContent = '📞'; bt.title = 'Guardar teléfono';
       bt.onclick = () => guardarTelefono(p);
-      const wa = document.createElement('button'); wa.className = 'btn btn-wa'; wa.textContent = 'WhatsApp';
+      const conAvisos = tieneAvisos(p);
+      const wa = document.createElement('button'); wa.className = conAvisos ? 'btn' : 'btn btn-wa'; wa.textContent = conAvisos ? '📱 Avisar' : 'WhatsApp';
+      wa.style.whiteSpace = 'nowrap';
       wa.onclick = () => avisar(t, p);
       li.append(bt, wa); la.appendChild(li);
     });
@@ -1199,10 +1202,44 @@
     guardar(); render();
   }
 
-  function avisar(t, p) {
-    abrirWa(p, textoPersona(t, p));
+  // Si la persona tiene la app con avisos, el mensaje le llega al móvil; si no, se abre WhatsApp
+  async function avisar(t, p, silencioso) {
+    let enviados = 0;
+    if (tieneAvisos(p)) enviados = await mandarMensajeApp(p, `🍽️ Borracha · ${etiqueta(t)}`, mensajeCorto(t, p));
+    if (enviados) { if (!silencioso) toast(`📱 ${saludo(p)} lo ha recibido en su móvil`); }
+    else if (silencioso) return false;
+    else abrirWa(p, textoPersona(t, p));
     t.avisados = { ...(t.avisados || {}), [p]: true }; guardar(); render();
+    return !!enviados;
   }
+  // Versión corta para la notificación
+  function mensajeCorto(t, p) {
+    const r = calcular(t), b = r.bal[p] || 0;
+    const debe = r.pagos.filter(x => x.de === p), cobra = r.pagos.filter(x => x.a === p);
+    let s = `Te tocan ${fmt(r.consumo[p] || 0)}` + (r.personal[p] ? ` (${fmt(r.comun[p])} común + ${fmt(r.personal[p])} tuyo)` : '') + '. ';
+    if (debe.length) s += 'Tienes que pagar ' + debe.map(x => `${fmt(x.c)} a ${saludo(x.a)}`).join(' y ') + '.';
+    else if (cobra.length) s += `Te tienen que dar ${fmt(b)}.`;
+    else s += 'Estás en paz 👍';
+    return s + ` · ${fechaTxt(t.fecha)}`;
+  }
+  async function mandarMensajeApp(para, titulo, cuerpo) {
+    if (!db || !navigator.onLine) return 0;
+    try {
+      if (!firebase.functions) await cargarScript('https://www.gstatic.com/firebasejs/10.12.2/firebase-functions-compat.js');
+      const r = await firebase.app().functions('europe-west1').httpsCallable('mandarMensaje')({ para, titulo, cuerpo });
+      return (r.data && r.data.enviados) || 0;
+    } catch (e) { console.log('No se pudo mandar el mensaje:', e && e.message); return 0; }
+  }
+  $('btnAvisarTodos').onclick = async () => {
+    const t = st.turno, r = calcular(t), yo = st.yo && st.yo.nombre;
+    if (!r.total) return toast('Todavía no hay gastos');
+    const b = $('btnAvisarTodos'); b.disabled = true; b.textContent = '📣 Avisando…';
+    const sinApp = [];
+    let ok = 0;
+    for (const p of r.personas.filter(n => n !== yo)) { if (await avisar(t, p, true)) ok++; else sinApp.push(saludo(p)); }
+    b.disabled = false; b.textContent = '📣 Avisar a todos los que tienen la app';
+    toast(`📱 Avisados ${ok} en la app` + (sinApp.length ? ` · sin app (usa WhatsApp): ${sinApp.join(', ')}` : ''));
+  };
   function guardarTelefono(p) {
     const actual = (st.telefonos || {})[p] || '';
     const v = prompt(`Teléfono de ${p} (se guarda solo en este móvil). Déjalo vacío para borrarlo:`, actual);
@@ -1640,6 +1677,7 @@
   let db = null, miUid = null, docActual = null, desuscribir = null, usuarios = {}, tSubir = null;
   const idTurno = t => `${t.parque}_${t.fecha}_T${t.num}`;
   const tieneApp = nombre => Object.values(usuarios).some(u => u.nombre === nombre);
+  const tieneAvisos = nombre => Object.values(usuarios).some(u => u.nombre === nombre && u.fcm);
   function estadoNube(ico, txt) { $('nube').textContent = ico; $('nube').title = txt; $('nubeTxt').textContent = ico + ' ' + txt; }
 
   async function iniciarNube() {
