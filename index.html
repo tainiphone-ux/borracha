@@ -765,9 +765,11 @@
       // Botones solo para los implicados: quien paga avisa de que ha pagado;
       // quien cobra puede marcar cualquier pago como cobrado (también de quien no tiene la app).
       if (yo === p.de && e === 'pendiente') boton('💸 Ya he pagado', true, () => marcarPagado(t, p));
-      if (yo === p.a && e === 'pendiente') boton('✅ Marcar cobrado', false, () => marcarCobrado(t, p));
-      if (yo === p.a && e === 'pagado') boton('✅ Confirmar recibido', true, () => confirmarPago(t, p));
-      if ((yo === p.de && e === 'pagado') || (yo === p.a && e !== 'pendiente')) { const u = document.createElement('button'); u.className = 'btn-ghost'; u.textContent = '↩️ Deshacer'; u.onclick = () => deshacerPago(t, p); acc.appendChild(u); }
+      // Si quien cobra no tiene la app, cualquiera que la tenga puede marcarlo por él
+      const gestiona = yo === p.a || (yo && !tieneApp(p.a));
+      if (gestiona && yo !== p.de && e === 'pendiente') boton('✅ Marcar cobrado', false, () => marcarCobrado(t, p));
+      if (gestiona && yo !== p.de && e === 'pagado') boton('✅ Confirmar recibido', yo === p.a, () => confirmarPago(t, p));
+      if ((yo === p.de && e === 'pagado') || (gestiona && yo !== p.de && e !== 'pendiente')) { const u = document.createElement('button'); u.className = 'btn-ghost'; u.textContent = '↩️ Deshacer'; u.onclick = () => deshacerPago(t, p); acc.appendChild(u); }
       if (!acc.children.length) acc.hidden = true;
       d.appendChild(acc); lpag.appendChild(d);
     });
