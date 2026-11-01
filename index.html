@@ -127,6 +127,11 @@
   .prods-edit li { flex-wrap: wrap; }
   .prods-edit .p-para { flex: 1 0 100%; padding: 6px 8px; font-size: 13px; border-radius: 8px; color: var(--sub); }
   .prods-edit .p-para.suyo { color: var(--rojo); border-color: var(--rojo); font-weight: 600; }
+  .banner-pasado { display: flex; align-items: center; gap: 10px; background: #fff3cd; color: #5c4400; border: 1px solid #f0d58a; border-radius: 12px; padding: 10px 12px; margin-bottom: 12px; font-size: 14px; }
+  .banner-pasado[hidden] { display: none; }
+  .banner-pasado span { flex: 1; }
+  .banner-pasado .btn { padding: 8px 12px; font-size: 14px; }
+  #listaHistorial .info { cursor: pointer; }
   .lista { list-style: none; margin: 0; padding: 0; }
   .lista li { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--borde); }
   .lista li:last-child { border-bottom: 0; }
@@ -172,6 +177,10 @@
 </header>
 
 <main>
+  <div class="banner-pasado" id="bannerPasado" hidden>
+    <span id="bannerPasadoTxt"></span>
+    <button class="btn fijo" id="btnVolverHoy">Volver a hoy</button>
+  </div>
   <!-- TURNO -->
   <section id="s-turno" class="activa">
     <div class="card banner-instalar" id="bannerNotis" hidden>
@@ -641,6 +650,9 @@
     document.querySelector('header h1').textContent = `Borracha · ${etiqueta(t)}`;
 
     // Turno: chips
+    const otroDia = t.fecha && t.fecha !== fechaGuardia();
+    $('bannerPasado').hidden = !otroDia;
+    if (otroDia) $('bannerPasadoTxt').textContent = `📅 Estás viendo el turno del ${fechaTxt(t.fecha)} (${etiqueta(t)})`;
     const nTraen = (t.traen || []).length;
     $('resumenBorracha').innerHTML = `🍽️ <b>${t.personas.length}</b> en la borracha` + (nTraen ? ` · 🥪 ${nTraen} ${nTraen === 1 ? 'trae' : 'traen'} su comida` : '');
     const ct = $('chipsTurno'); ct.innerHTML = '';
@@ -814,7 +826,8 @@
     st.historial.forEach(h => {
       const rr = calcular(h);
       const li = document.createElement('li');
-      li.innerHTML = `<div class="info">${esc(fechaTxt(h.fecha))} · ${esc(etiqueta(h))}<small>${h.personas.length} personas · ${h.gastos.length} gastos</small></div><span class="monto">${fmt(rr.total)}</span>`;
+      li.innerHTML = `<div class="info">${esc(fechaTxt(h.fecha))} · ${esc(etiqueta(h))}<small>${h.personas.length} personas · ${h.gastos.length} gastos · <b style="color:var(--rojo)">Abrir ›</b></small></div><span class="monto">${fmt(rr.total)}</span>`;
+      li.querySelector('.info').onclick = () => abrirDelHistorial(h);
       const sh = document.createElement('button'); sh.className = 'btn-ghost'; sh.textContent = '📤'; sh.onclick = () => compartir(h);
       const del = document.createElement('button'); del.className = 'btn-ghost'; del.textContent = '🗑️';
       del.onclick = () => { if (confirm('¿Borrar este turno del historial?')) { st.historial = st.historial.filter(x => x.id !== h.id); h.gastos.forEach(g => fotoDel(g.id).catch(() => {})); guardar(); render(); } };
@@ -840,14 +853,43 @@
   function cambiarTurno(parque, n, fecha = st.turno.fecha) {
     const t = st.turno;
     if (t.parque === parque && t.num === n && t.fecha === fecha) return;
-    // Sin conexión, lo apuntado en este turno se guarda en el historial para no perderlo
-    if (!db && t.gastos.length) st.historial.unshift(t);
+    // Lo apuntado en un día pasado (o sin conexión) se guarda en el historial para no perderlo
+    if (t.gastos.length && (!db || t.fecha < fechaGuardia())) guardarEnHistorial(t);
     st.turno = nuevoTurno(parque, n); st.turno.fecha = fecha;
+    if (fecha !== fechaGuardia()) st.turno.revisando = true;
     st.turno.personas = [...plantilla(parque, n)];
     reparto = new Set(st.turno.personas);
     limpiarForm(); guardar(); render();
   }
   const elegir = (parque, n) => cambiarTurno(parque, n);
+
+  // Historial: una copia por turno (si ya estaba, se actualiza)
+  function guardarEnHistorial(t) {
+    const id = idTurnoLocal(t);
+    st.historial = [JSON.parse(JSON.stringify({ ...t, revisando: undefined })), ...st.historial.filter(h => idTurnoLocal(h) !== id)]
+      .sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''));
+  }
+  // Abrir un turno del historial: se ve y se puede modificar; si está en la nube, manda lo de la nube
+  function abrirDelHistorial(h) {
+    const t = st.turno;
+    if (idTurnoLocal(t) === idTurnoLocal(h)) return irA('turno');
+    if (t.gastos.length && (!db || t.fecha < fechaGuardia())) guardarEnHistorial(t);
+    st.turno = JSON.parse(JSON.stringify(h));
+    st.turno.revisando = h.fecha !== fechaGuardia();
+    reparto = new Set(st.turno.personas);
+    limpiarForm(); guardar(); render(); irA('turno');
+    toast(`Turno del ${fechaTxt(h.fecha)} abierto`);
+  }
+  function irA(seccion) {
+    document.querySelectorAll('nav button').forEach(x => x.classList.toggle('activa', x.dataset.s === seccion));
+    document.querySelectorAll('main section').forEach(sc => sc.classList.toggle('activa', sc.id === 's-' + seccion));
+    window.scrollTo(0, 0);
+  }
+  $('btnVolverHoy').onclick = () => {
+    const t = st.turno, hoyG = fechaGuardia();
+    cambiarTurno(t.parque, turnoDeFecha(hoyG), hoyG);
+    st.turno.revisando = false; guardarLocal(); render(); irA('turno');
+  };
 
   // ---------- Fotos de facturas (IndexedDB: caben muchas más que en localStorage) ----------
   let fotoForm = null;  // foto (dataURL) del gasto que se está editando
@@ -1307,7 +1349,7 @@
     const t = st.turno;
     if (!t.gastos.length) return toast('No hay gastos en este turno');
     if (!confirm('¿Cerrar el turno? Se guardará en el historial y empezará uno nuevo con la misma gente.')) return;
-    st.historial.unshift(t); st.turno = nuevoTurno(t.parque, t.num); st.turno.personas = [...plantilla()];
+    guardarEnHistorial(t); st.turno = nuevoTurno(t.parque, t.num); st.turno.personas = [...plantilla()];
     limpiarForm(); guardar(); render(); toast('Turno guardado en el historial');
   };
   $('btnExportar').onclick = () => copiar(JSON.stringify(st), 'Datos copiados');
@@ -1340,8 +1382,8 @@
   // Si el turno anterior tenía gastos, se guarda en el historial.
   function actualizarFecha() {
     const t = st.turno, f = fechaGuardia();
-    if (!t.fecha || t.fecha >= f) return false;
-    if (t.gastos.length) st.historial.unshift(t);
+    if (!t.fecha || t.fecha >= f || t.revisando) return false;
+    if (t.gastos.length) guardarEnHistorial(t);
     st.turno = nuevoTurno(t.parque, t.num); st.turno.personas = [...plantilla()];
     guardarLocal();
     return t.gastos.length ? `El turno del ${fechaTxt(t.fecha)} se ha guardado en el historial` : true;
