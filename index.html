@@ -1387,11 +1387,14 @@
     const t = st.turno, f = fechaGuardia();
     if (!t.fecha || t.fecha >= f || t.revisando) return false;
     if (t.gastos.length) guardarEnHistorial(t);
-    st.turno = nuevoTurno(t.parque, t.num); st.turno.personas = [...plantilla()];
+    // El día nuevo empieza con el turno que está de guardia hoy según el calendario
+    st.turno = nuevoTurno(t.parque, turnoDeFecha(f)); st.turno.personas = [...plantilla()];
     guardarLocal();
     return t.gastos.length ? `El turno del ${fechaTxt(t.fecha)} se ha guardado en el historial` : true;
   }
-  const avisoFecha = actualizarFecha();
+  // Si algo fallara al pasar al día nuevo, la app arranca igual con el turno que tenía
+  let avisoFecha = false;
+  try { avisoFecha = actualizarFecha(); } catch (e) { console.error('Al cambiar de día:', e); }
 
   // ---------- Alta: parque, turno y persona del dueño del teléfono ----------
   const alta = { parque: st.yo?.parque || POR_DEFECTO.parque, num: st.yo?.num || POR_DEFECTO.num, nombre: st.yo?.nombre || '' };
@@ -1707,7 +1710,8 @@
     if (debo.length) notificar(`⏰ Tienes que pagar ${fmt(debo.reduce((a, p) => a + p.c, 0))}`, debo.map(p => `${fmt(p.c)} a ${p.a}`).join(' · '), 'recordatorio-pagar');
     if (confirmar.length) notificar(`⏰ Tienes ${confirmar.length} ${confirmar.length === 1 ? 'pago' : 'pagos'} por confirmar`, confirmar.map(p => `${p.de}: ${fmt(p.c)}`).join(' · '), 'recordatorio-confirmar');
   }
-  const idTurnoLocal = t => `${t.parque}_${t.fecha}_T${t.num}`;
+  // (declaración de función: disponible desde el arranque, antes de que se ejecute el resto del código)
+  function idTurnoLocal(t) { return `${t.parque}_${t.fecha}_T${t.num}`; }
 
   // ---------- Conexión entre apps (Firebase: Firestore + acceso anónimo) ----------
   // Cada turno se comparte en turnos/{parque}_{fecha}_T{turno}; las fotos en fotos/{gasto}; quién tiene la app en usuarios/{id}.
