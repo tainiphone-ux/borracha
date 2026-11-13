@@ -125,8 +125,12 @@
   .explicacion small { color: var(--sub); }
   .pago-acc[hidden] { display: none; }
   .prods-edit li { flex-wrap: wrap; }
-  .prods-edit .p-para { flex: 1 0 100%; padding: 6px 8px; font-size: 13px; border-radius: 8px; color: var(--sub); }
+  .prods-edit .p-para { flex: 1 0 100%; padding: 6px 8px; font-size: 13px; border-radius: 8px; color: var(--sub); text-align: left; background: none; border: 1px solid var(--borde); }
   .prods-edit .p-para.suyo { color: var(--rojo); border-color: var(--rojo); font-weight: 600; }
+  .prods-edit .para-panel { flex: 1 0 100%; display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 10px; margin-top: 2px; background: var(--bg); border-radius: 10px; }
+  .prods-edit .para-panel label.check { margin: 0; font-size: 14px; flex: 0 0 auto; }
+  .prods-edit .para-panel label.check input { width: 17px; height: 17px; }
+  .prods-edit .para-panel button { flex: 1 0 auto; margin-top: 4px; font-size: 13px; padding: 6px 8px; }
   .banner-pasado { display: flex; align-items: center; gap: 10px; background: #fff3cd; color: #5c4400; border: 1px solid #f0d58a; border-radius: 12px; padding: 10px 12px; margin-bottom: 12px; font-size: 14px; }
   .banner-pasado[hidden] { display: none; }
   .banner-pasado span { flex: 1; }
@@ -517,10 +521,10 @@
   function calcular(t) {
     const bal = {}; const pagado = {}; const consumo = {};
     const todos = new Set(t.personas);
-    const personalesDe = g => (g.productos || []).filter(x => x.para && x.c);
+    const personalesDe = g => (g.productos || []).filter(x => paraArr(x).length && x.c);
     // Todos los gastos se reparten entre la gente actual de la borracha (pestaña Turno)
     const borracha = [...t.personas];
-    t.gastos.forEach(g => { todos.add(g.pagador); personalesDe(g).forEach(x => todos.add(x.para)); });
+    t.gastos.forEach(g => { todos.add(g.pagador); personalesDe(g).forEach(x => paraArr(x).forEach(p => todos.add(p))); });
     todos.forEach(p => { bal[p] = 0; pagado[p] = 0; consumo[p] = 0; });
     const personal = {}, personalItems = {};  // productos asignados a una sola persona (los paga enteros)
     todos.forEach(p => { personal[p] = 0; personalItems[p] = []; });
@@ -532,7 +536,11 @@
       pagado[g.pagador] += g.importe;
       // Los productos personales los paga entero su dueño; el resto del gasto es común
       let comunGasto = g.importe;
-      personalesDe(g).forEach(x => { exacto[x.para] += x.c; personal[x.para] += x.c; personalItems[x.para].push(x); comunGasto -= x.c; });
+      personalesDe(g).forEach(x => {
+        const ps = paraArr(x), parte = x.c / ps.length;  // si es para varios, se reparte igual entre ellos
+        ps.forEach(p => { exacto[p] += parte; personal[p] += parte; personalItems[p].push(x); });
+        comunGasto -= x.c;
+      });
       if (!borracha.length) return;
       // Cada persona pesa tantas partes como comidas del gasto a las que va (almuerzo y/o cena)
       const cg = comidasGasto(g);
@@ -602,7 +610,7 @@
       `<li>${NOMBRE_COMIDAS[k]} (${grupos[k].length}): <b>${fmt(importeGrupo(grupos[k]))}</b>${grupos[k].length > 1 ? ' cada uno' : ''}</li>`).join('') + '</ul>';
     // Productos personales: cada uno paga entero lo suyo, además de su parte común
     const conPersonal = r.personas.filter(n => r.personal[n]);
-    if (conPersonal.length) h += `<p>🧍 <b>${fmt(r.totalPersonal)}</b> en gastos personales, que paga cada uno entero:</p><ul>`
+    if (conPersonal.length) h += `<p>🧍 <b>${fmt(r.totalPersonal)}</b> en gastos de uno o varios (no de toda la borracha):</p><ul>`
       + conPersonal.map(n => `<li>${esc(n)}: <b>${fmt(r.personal[n])}</b> <small>(${r.personalItems[n].map(x => esc(x.n)).join(', ')})</small></li>`).join('') + '</ul>';
     const nTraen = (t.traen || []).length;
     if (nTraen) h += `<p><small>🥪 ${nTraen} ${nTraen === 1 ? 'trae' : 'traen'} su comida y no ${nTraen === 1 ? 'paga' : 'pagan'}.</small></p>`;
@@ -727,7 +735,7 @@
     if (!t.gastos.length) lg.innerHTML = '<p class="vacio">Aún no hay gastos.</p>';
     t.gastos.forEach(g => {
       const li = document.createElement('li');
-      li.innerHTML = `<div class="info">${esc(g.concepto || 'Gasto')}<small>${txtComidas(comidasGasto(g))[0].toUpperCase() + txtComidas(comidasGasto(g)).slice(1)} · pagó <b>${esc(g.pagador)}</b></small>${g.productos && g.productos.length ? `<details class="prods"><summary>Ver ${g.productos.length} productos</summary>${g.productos.map(x => `<div><span>${esc(x.n)}${x.para ? ` <b>· 👤 ${esc(saludo(x.para))}</b>` : ''}</span><span>${fmt(x.c)}</span></div>`).join('')}</details>` : ''}</div><span class="monto">${fmt(g.importe)}</span>`;
+      li.innerHTML = `<div class="info">${esc(g.concepto || 'Gasto')}<small>${txtComidas(comidasGasto(g))[0].toUpperCase() + txtComidas(comidasGasto(g)).slice(1)} · pagó <b>${esc(g.pagador)}</b></small>${g.productos && g.productos.length ? `<details class="prods"><summary>Ver ${g.productos.length} productos</summary>${g.productos.map(x => { const ps = paraArr(x); return `<div><span>${esc(x.n)}${ps.length ? ` <b>· 👤 ${esc(ps.map(saludo).join(', '))}</b>` : ''}</span><span>${fmt(x.c)}</span></div>`; }).join('')}</details>` : ''}</div><span class="monto">${fmt(g.importe)}</span>`;
       if (g.foto) {
         const im = document.createElement('img'); im.className = 'miniatura'; im.alt = 'Factura';
         fotoCargar(g.id).then(d => { if (d) im.src = d; }).catch(() => {});
@@ -1114,6 +1122,12 @@
     }
   }
 
+  let paraAbiertoIdx = null;  // índice del producto cuyo panel de "¿para quién?" está abierto
+  function etiquetaPara(ps) {
+    if (!ps.length) return '👥 Todos (común)';
+    if (ps.length === 1) return `👤 Solo ${saludo(ps[0])}`;
+    return `👥 ${ps.map(saludo).join(', ')} (${ps.length})`;
+  }
   function renderProductos() {
     const ul = $('listaProductos'); ul.innerHTML = '';
     $('productosZona').hidden = !productosForm.length && $('ocrEstado').hidden && !modoManual;
@@ -1128,14 +1142,37 @@
       c.value = x.c ? (x.c / 100).toFixed(2).replace('.', ',') : '';
       c.onchange = () => { const v = parse(c.value); x.c = isFinite(v) ? v : 0; renderProductos(); };
       const del = document.createElement('button'); del.className = 'btn-ghost'; del.textContent = '✕';
-      del.onclick = () => { productosForm.splice(i, 1); renderProductos(); };
-      // ¿Para quién es este producto? Por defecto, para todos (gasto común)
-      const para = document.createElement('select'); para.className = 'p-para' + (x.para ? ' suyo' : '');
-      para.innerHTML = '<option value="">👥 Todos (común)</option>' + [...st.turno.personas, ...(st.turno.traen || [])]
-        .map(nom => `<option value="${esc(nom)}">👤 Solo ${esc(nom)}</option>`).join('');
-      para.value = x.para || '';
-      para.onchange = () => { x.para = para.value || undefined; renderProductos(); };
-      li.append(n, c, del, para); ul.appendChild(li);
+      del.onclick = () => { productosForm.splice(i, 1); paraAbiertoIdx = null; renderProductos(); };
+      // ¿Para quién es este producto? Por defecto, para todos (gasto común); se puede elegir uno, dos o más
+      const posibles = [...st.turno.personas, ...(st.turno.traen || [])];
+      const sel = paraArr(x);
+      const paraBtn = document.createElement('button'); paraBtn.type = 'button';
+      paraBtn.className = 'p-para' + (sel.length ? ' suyo' : '');
+      paraBtn.textContent = etiquetaPara(sel);
+      paraBtn.onclick = () => { paraAbiertoIdx = paraAbiertoIdx === i ? null : i; renderProductos(); };
+      li.append(n, c, del, paraBtn);
+      if (paraAbiertoIdx === i) {
+        const panel = document.createElement('div'); panel.className = 'para-panel';
+        posibles.forEach(nom => {
+          const lab = document.createElement('label'); lab.className = 'check';
+          const chk = document.createElement('input'); chk.type = 'checkbox'; chk.checked = sel.includes(nom);
+          chk.onchange = () => {
+            const cur = new Set(paraArr(x));
+            if (chk.checked) cur.add(nom); else cur.delete(nom);
+            x.para = [...cur]; renderProductos();
+          };
+          const span = document.createElement('span'); span.textContent = saludo(nom);
+          lab.append(chk, span); panel.appendChild(lab);
+        });
+        const limpiar = document.createElement('button'); limpiar.type = 'button'; limpiar.className = 'btn-ghost';
+        limpiar.textContent = '👥 Todos (común)';
+        limpiar.onclick = () => { x.para = []; paraAbiertoIdx = null; renderProductos(); };
+        const listo = document.createElement('button'); listo.type = 'button'; listo.className = 'btn-ghost';
+        listo.textContent = 'Listo';
+        listo.onclick = () => { paraAbiertoIdx = null; renderProductos(); };
+        panel.append(limpiar, listo); li.appendChild(panel);
+      }
+      ul.appendChild(li);
     });
     const suma = productosForm.reduce((a, x) => a + (x.c || 0), 0), imp = parse($('gImporte').value);
     $('sumaProd').textContent = productosForm.length
@@ -1148,7 +1185,7 @@
     modoManual = false; $('botonesInicio').hidden = false; $('btnArchivo').hidden = false;
     editando = null; $('gConcepto').value = ''; $('gImporte').value = ''; $('gPagador').value = ''; ponerFoto(null);
     reparto = new Set(st.turno.personas); comidasForm = new Set(['A', 'C']);
-    productosForm = []; ocrTexto = ''; $('ocrEstado').hidden = true; renderProductos();
+    productosForm = []; ocrTexto = ''; paraAbiertoIdx = null; $('ocrEstado').hidden = true; renderProductos();
     $('tituloForm').textContent = 'Nuevo gasto'; $('btnGuardarGasto').textContent = 'Añadir gasto';
     $('btnCancelarEdicion').style.display = 'none';
   }
@@ -1156,7 +1193,7 @@
   function editar(g) {
     editando = g.id; $('gConcepto').value = g.concepto; $('gImporte').value = (g.importe / 100).toString().replace('.', ',');
     comidasForm = new Set(comidasGasto(g)); render(); $('gPagador').value = g.pagador;
-    productosForm = (g.productos || []).map(x => ({ ...x })); renderProductos();
+    productosForm = (g.productos || []).map(x => ({ ...x })); paraAbiertoIdx = null; renderProductos();
     ponerFoto(null); if (g.foto) fotoCargar(g.id).then(d => { if (editando === g.id) ponerFoto(d || null); }).catch(() => {});
     $('tituloForm').textContent = 'Editar gasto'; $('btnGuardarGasto').textContent = 'Guardar cambios';
     $('btnCancelarEdicion').style.display = 'block'; window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1174,7 +1211,7 @@
     const previo = editando && t.gastos.find(x => x.id === editando);
     const g = { id: editando || uid(), creado: (previo && previo.creado) || Date.now(), por: st.yo ? st.yo.nombre : '', concepto: $('gConcepto').value.trim(), importe, pagador: $('gPagador').value, entre: [...t.personas], comidas: [...comidasForm].sort(), foto: !!fotoForm,
       ocr: fotoForm ? (ocrTexto || (previo && previo.ocr) || '') : '',
-      productos: productosForm.filter(x => x.n.trim() || x.c).map(x => ({ n: x.n.trim() || 'Producto', c: x.c || 0, ...(x.para ? { para: x.para } : {}) })) };
+      productos: productosForm.filter(x => x.n.trim() || x.c).map(x => { const ps = paraArr(x); return { n: x.n.trim() || 'Producto', c: x.c || 0, ...(ps.length ? { para: ps } : {}) }; }) };
     if (fotoForm) { fotoSet(g.id, fotoForm).catch(() => toast('No se pudo guardar la foto')); subirFoto(g.id, fotoForm); }
     else { fotoDel(g.id).catch(() => {}); if (previo && previo.foto) borrarFotoNube(g.id); }
     if (editando) t.gastos = t.gastos.map(x => x.id === editando ? g : x); else t.gastos.push(g);
@@ -1216,6 +1253,8 @@
   const telWa = tel => { let d = String(tel || '').replace(/\D/g, ''); if (d.startsWith('00')) d = d.slice(2); if (d.length === 9) d = '34' + d; return d; };
   const abrirWa = (p, texto) => window.open(`https://wa.me/${telWa((st.telefonos || {})[p])}?text=${encodeURIComponent(texto)}`, '_blank');
   const saludo = p => /^Guardia extra/.test(p) ? p : p.split(' ')[0];
+  // x.para puede ser un nombre suelto (formato antiguo) o una lista de nombres (uno, dos o más)
+  const paraArr = x => Array.isArray(x.para) ? x.para : (x.para ? [x.para] : []);
 
   // ---------- Estado de cada pago: pendiente → pagado (lo marca quien paga) → confirmado (lo marca quien cobra) ----------
   function estadoPago(t, k) {
