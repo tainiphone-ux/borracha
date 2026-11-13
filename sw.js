@@ -1,6 +1,6 @@
 // Service worker de Borracha: permite instalar la app y abrirla sin cobertura.
 // Siempre intenta la red primero (para tener la última versión) y, si no hay, usa la copia guardada.
-const CACHE = 'borracha-v4';
+const CACHE = 'borracha-v5';
 const BASICOS = ['./', 'index.html', 'manifest.webmanifest', 'icono-192.png', 'icono-512.png', 'icono-180.png', 'icono-32.png'];
 
 self.addEventListener('install', e => {
@@ -18,7 +18,8 @@ self.addEventListener('fetch', e => {
   // Solo los archivos de la propia app; Firebase, el lector de facturas, etc. van directos a la red
   if (e.request.method !== 'GET' || url.origin !== location.origin) return;
   e.respondWith(
-    fetch(e.request)
+    // no-store: ignora la caché del propio navegador para no quedarse con una versión antigua
+    fetch(e.request, { cache: 'no-store' })
       .then(r => { const copia = r.clone(); caches.open(CACHE).then(c => c.put(e.request, copia)); return r; })
       .catch(() => caches.match(e.request, { ignoreSearch: true }).then(r => r || caches.match('index.html')))
   );
